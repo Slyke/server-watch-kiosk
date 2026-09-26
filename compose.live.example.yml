@@ -1,0 +1,10 @@
+# Review the mounts, copy secrets.example.json5 to secrets.json5, then:
+# docker compose -f compose.yml -f compose.live.example.yml up -d --build
+services:
+  board:
+    command: ["node", "dist/server/main.js", "--live"]
+    volumes:
+      - ./secrets.json5:/run/secrets/secrets.json5:ro
+      # Use an operator-provided read-only kubeconfig, not agent credentials.
+      # - ./credentials/home.kubeconfig:/run/secrets/home.kubeconfig:ro
+      # - ./credentials/ca.pem:/run/secrets/ca.pem:ro

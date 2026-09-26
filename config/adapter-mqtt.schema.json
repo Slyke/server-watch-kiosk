@@ -1,0 +1,115 @@
+{
+  "$ref": "#/definitions/adapter-mqtt",
+  "definitions": {
+    "adapter-mqtt": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lwtTopic": {
+          "type": "string"
+        },
+        "offlineValue": {
+          "type": "string",
+          "default": "Offline"
+        },
+        "onlineValue": {
+          "type": "string",
+          "default": "Online"
+        },
+        "timestampPath": {
+          "type": "string"
+        },
+        "timestampFormat": {
+          "type": "string",
+          "enum": [
+            "rfc3339",
+            "epochSeconds",
+            "epochMilliseconds"
+          ],
+          "default": "rfc3339"
+        },
+        "warningAfter": {
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$",
+          "default": "10m"
+        },
+        "criticalAfter": {
+          "$ref": "#/definitions/adapter-mqtt/properties/warningAfter",
+          "default": "15m"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 256,
+                "default": ""
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "range",
+                  "timestamp"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "warningAfter": {
+                "$ref": "#/definitions/adapter-mqtt/properties/warningAfter"
+              },
+              "criticalAfter": {
+                "$ref": "#/definitions/adapter-mqtt/properties/warningAfter"
+              },
+              "failureState": {
+                "type": "string",
+                "enum": [
+                  "warning",
+                  "critical"
+                ],
+                "default": "critical"
+              }
+            },
+            "required": [
+              "operator"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 20,
+          "default": []
+        }
+      },
+      "required": [
+        "topic"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

@@ -1,0 +1,40 @@
+{
+  "$ref": "#/definitions/adapter-kubernetes.job",
+  "definitions": {
+    "adapter-kubernetes.job": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "name": {
+          "$ref": "#/definitions/adapter-kubernetes.job/properties/namespace"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "Job",
+            "CronJob"
+          ],
+          "default": "Job"
+        },
+        "warningAfter": {
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$"
+        },
+        "criticalAfter": {
+          "$ref": "#/definitions/adapter-kubernetes.job/properties/warningAfter",
+          "default": "24h"
+        }
+      },
+      "required": [
+        "namespace",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

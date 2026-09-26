@@ -1,0 +1,32 @@
+name: service-watcher-kiosk
+services:
+  board:
+    build:
+      context: .
+      args:
+        BUILD_HASH: ${BUILD_HASH:-unknown}
+    image: service-watcher-kiosk:local
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${BOARD_BIND:-127.0.0.1}:${BOARD_PORT:-8098}:8098"
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      CONFIG_FILE: /app/config.json5
+      SECRETS_FILE: /run/secrets/secrets.json5
+    volumes:
+      - ./config.json5:/app/config.json5:ro
+      - ./checks:/app/checks:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 2
+    # If unprivileged ICMP is unavailable on the host, narrowly opt in:
+    # cap_add: [NET_RAW]

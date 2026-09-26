@@ -1,0 +1,54 @@
+// Integration template: supply YOUR addresses, credentials, queries and namespaces.
+// Environment variables replace entire values only; no partial interpolation.
+// This file intentionally cannot run until the required values are supplied.
+{
+  schemaVersion: 1,
+  demo: { enabled: false },
+  uiDefaults: { theme: 'reference', optionsEnabled: true },
+  plugins: { directory: '../checks', enabled: ['custom.garmin'], allowHotReload: true, watch: false },
+  sources: {
+    home: { type: 'kubernetes', kubeconfigFile: '/run/secrets/home.kubeconfig', namespaces: ['health', 'apps'] },
+    prometheus: { type: 'prometheus', url: '${PROMETHEUS_URL}' },
+    healthDb: {
+      type: 'postgres', host: '${GARMIN_DB_HOST}', database: '${GARMIN_DB_NAME}',
+      usernameRef: 'garminDbUser', passwordRef: 'garminDbPassword',
+      tls: { caFile: '/run/secrets/postgres-ca.pem' },
+    },
+    devices: {
+      type: 'mqtt', url: '${MQTT_URL}', usernameRef: 'mqttUser', passwordRef: 'mqttPassword',
+      topics: ['tele/kitchen/STATE', 'tele/kitchen/LWT'],
+    },
+  },
+  checks: {
+    garminApp: { type: 'kubernetes.workload', source: 'home', params: { namespace: 'health', kind: 'Deployment', name: 'garmin-importer' } },
+    garminDatabase: { type: 'kubernetes.workload', source: 'home', params: { namespace: 'health', kind: 'StatefulSet', name: 'garmin-postgres' } },
+    garminFreshness: {
+      type: 'custom.garmin', source: 'healthDb', timeout: '10s', allowPresentation: true,
+      params: {
+        source: 'healthDb', query: '${GARMIN_LAST_SUCCESS_QUERY}', values: ['garmin', 'success'],
+        column: 'last_success_at', warningHours: 20, criticalHours: 24,
+      },
+    },
+    // A generic probe can be extended with additional checks or a custom module.
+    bitaxe: {
+      type: 'http', params: {
+        url: '${BITAXE_SYSTEM_INFO_URL}',
+        expectedContentType: 'application/json',
+        assertions: [{ path: 'hashRate', operator: 'gt', value: 0 }],
+      },
+    },
+    kitchen: {
+      type: 'mqtt', source: 'devices',
+      params: {
+        topic: 'tele/kitchen/STATE', lwtTopic: 'tele/kitchen/LWT',
+        timestampPath: 'Timestamp', timestampFormat: 'epochSeconds',
+        warningAfter: '10m', criticalAfter: '15m',
+      },
+    },
+  },
+  services: [
+    { id: 'garmin', name: 'Garmin sync', group: 'Health', priority: 100, checks: [{ id: 'garminApp' }, { id: 'garminDatabase' }, { id: 'garminFreshness' }] },
+    { id: 'bitaxe', name: 'Bitaxe', group: 'Devices', checks: [{ id: 'bitaxe' }] },
+    { id: 'kitchen', name: 'Kitchen device', group: 'Devices', checks: [{ id: 'kitchen' }] },
+  ],
+}

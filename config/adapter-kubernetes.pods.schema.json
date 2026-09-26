@@ -1,0 +1,45 @@
+{
+  "$ref": "#/definitions/adapter-kubernetes.pods",
+  "definitions": {
+    "adapter-kubernetes.pods": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/adapter-kubernetes.pods/properties/namespace"
+          },
+          "minItems": 1
+        },
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "empty": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "critical",
+            "paused"
+          ],
+          "default": "unknown"
+        },
+        "restartWarning": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 5
+        }
+      },
+      "required": [
+        "namespace"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

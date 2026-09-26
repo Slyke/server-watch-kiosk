@@ -1,0 +1,40 @@
+import { test, expect } from '@playwright/test';
+test('manual tab, pod and container survive refresh and resize', async ({ page, request }) => {
+  await request.post('/api/v1/runtime', { data: { action: 'scenario', scenario: 'mixed' } });
+  await page.goto('/');
+  await page.locator('[data-service="home-assistant"]').click();
+  await page.getByRole('tab', { name: 'Pod logs', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Pod', exact: true }).selectOption('simulated:home-assistant:1');
+  await page.getByRole('combobox', { name: 'Container', exact: true }).selectOption('sidecar');
+  await page.getByRole('tab', { name: 'Events', exact: true }).click();
+  await page.waitForTimeout(5500);
+  await expect(page.getByRole('tab', { name: 'Events', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('combobox', { name: 'Pod', exact: true })).toHaveValue('simulated:home-assistant:1');
+  await page.getByRole('separator').focus(); await page.keyboard.press('ArrowLeft');
+  await page.getByRole('tab', { name: 'Pod logs', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Container', exact: true })).toHaveValue('sidecar');
+  await expect(page.locator('.log-text')).toContainText('No log output');
+});
+test('late automatic discovery cannot overwrite manual tab choice', async ({ page, request }) => {
+  await request.post('/api/v1/runtime', { data: { action: 'scenario', scenario: 'mixed' } });
+  let release: (() => void) | undefined;
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/diagnostics?discover=true', async route => { await delayed; await route.continue(); });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Description', exact: true }).click();
+  release!();
+  await expect(page.locator('.log-text')).toContainText('SIMULATED DESCRIPTION');
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole('tab', { name: 'Description', exact: true })).toHaveAttribute('aria-selected', 'true');
+});
+test('outside modal click and focus trapping work', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Close diagnostics', exact: true }).click();
+  await page.locator('[data-service="nextcloud"]').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  for (let count = 0; count < 15; count++) await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.querySelector('dialog')?.contains(document.activeElement))).toBe(true);
+  await page.mouse.click(2, 2);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.locator('[data-service="nextcloud"]')).toBeFocused();
+});

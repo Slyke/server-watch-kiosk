@@ -1,0 +1,483 @@
+{
+  "$ref": "#/definitions/snapshot",
+  "definitions": {
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "instanceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "demo",
+            "live"
+          ]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "pollMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 86400000
+        },
+        "staleAfterMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 86400000
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "group": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "priority": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "warning",
+                  "critical",
+                  "unknown",
+                  "paused"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "eventAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "http",
+                              "graphql",
+                              "ping",
+                              "tcp",
+                              "dns",
+                              "mqtt",
+                              "prometheus",
+                              "postgres",
+                              "kubernetes",
+                              "custom"
+                            ]
+                          },
+                          "label": {
+                            "type": "string",
+                            "maxLength": 128
+                          },
+                          "message": {
+                            "$ref": "#/definitions/snapshot/properties/services/items/properties/checks/items/properties/reason"
+                          },
+                          "statusCode": {
+                            "type": "integer",
+                            "minimum": 100,
+                            "maximum": 599
+                          },
+                          "durationMs": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 32
+                    },
+                    "measurements": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string",
+                            "maxLength": 128
+                          }
+                        ]
+                      }
+                    },
+                    "presentation": {
+                      "type": "object",
+                      "properties": {
+                        "background": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "border": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "icon": {
+                          "type": "string",
+                          "maxLength": 8
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 128
+                        },
+                        "text": {
+                          "$ref": "#/definitions/snapshot/properties/services/items/properties/checks/items/properties/reason"
+                        },
+                        "textMode": {
+                          "type": "string",
+                          "enum": [
+                            "truncate",
+                            "wrap"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "id": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/id"
+                    },
+                    "type": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/id"
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "rawState": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+                    },
+                    "lastAttempt": {
+                      "$ref": "#/definitions/snapshot/properties/generatedAt"
+                    },
+                    "completedAt": {
+                      "$ref": "#/definitions/snapshot/properties/generatedAt"
+                    },
+                    "elapsedMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "lastSuccess": {
+                      "$ref": "#/definitions/snapshot/properties/generatedAt"
+                    },
+                    "validUntil": {
+                      "$ref": "#/definitions/snapshot/properties/generatedAt"
+                    },
+                    "ageMs": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "remainingMs": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "lastKnownState": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+                    },
+                    "confirmation": {
+                      "type": "object",
+                      "properties": {
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "failure",
+                            "recovery"
+                          ]
+                        },
+                        "since": {
+                          "$ref": "#/definitions/snapshot/properties/generatedAt"
+                        },
+                        "remainingMs": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "phase",
+                        "since",
+                        "remainingMs"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "reason",
+                    "id",
+                    "type",
+                    "label",
+                    "rawState",
+                    "ageMs",
+                    "remainingMs"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/id"
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "state": {
+                      "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    "fresh": {
+                      "type": "boolean"
+                    },
+                    "confirmed": {
+                      "type": "boolean"
+                    },
+                    "remainingMs": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "state",
+                    "required",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              },
+              "fresh": {
+                "type": "boolean"
+              },
+              "confirmed": {
+                "type": "boolean"
+              },
+              "remainingMs": {
+                "type": "number",
+                "minimum": 0
+              },
+              "lastKnownState": {
+                "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+              },
+              "presentation": {
+                "$ref": "#/definitions/snapshot/properties/services/items/properties/checks/items/properties/presentation"
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 10
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "group",
+              "priority",
+              "state",
+              "reason",
+              "checks",
+              "dependencies",
+              "fresh",
+              "confirmed",
+              "remainingMs",
+              "links"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/snapshot/properties/services/items/properties/id"
+              },
+              "state": {
+                "$ref": "#/definitions/snapshot/properties/services/items/properties/state"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "id",
+              "state",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000
+        },
+        "ui": {
+          "type": "object",
+          "properties": {
+            "theme": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "dark",
+                "light",
+                "contrast",
+                "tron"
+              ]
+            },
+            "optionsEnabled": {
+              "type": "boolean"
+            },
+            "allowHotReload": {
+              "type": "boolean"
+            },
+            "autoDiagnostics": {
+              "type": "boolean"
+            },
+            "sortMode": {
+              "type": "string",
+              "enum": [
+                "severity",
+                "name",
+                "custom"
+              ]
+            },
+            "splitRatio": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 0.8
+            },
+            "customOrders": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/snapshot/properties/services/items/properties/id"
+                },
+                "maxItems": 1000
+              }
+            }
+          },
+          "required": [
+            "theme",
+            "optionsEnabled",
+            "allowHotReload",
+            "autoDiagnostics",
+            "sortMode",
+            "splitRatio",
+            "customOrders"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "apiVersion",
+        "instanceId",
+        "revision",
+        "mode",
+        "generatedAt",
+        "pollMs",
+        "staleAfterMs",
+        "services",
+        "sources",
+        "ui"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

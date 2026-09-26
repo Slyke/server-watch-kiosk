@@ -1,0 +1,64 @@
+{
+  "$ref": "#/definitions/diagnostic-section",
+  "definitions": {
+    "diagnostic-section": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "logs",
+            "description",
+            "events",
+            "probes",
+            "checks",
+            "message"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "empty",
+            "forbidden",
+            "timeout",
+            "unavailable"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 262144
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "truncated": {
+          "type": "boolean",
+          "default": false
+        },
+        "previous": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "label",
+        "availability",
+        "text",
+        "observedAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

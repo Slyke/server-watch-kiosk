@@ -1,0 +1,103 @@
+{
+  "$ref": "#/definitions/adapter-prometheus",
+  "definitions": {
+    "adapter-prometheus": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        },
+        "reduction": {
+          "type": "string",
+          "enum": [
+            "single",
+            "min",
+            "max",
+            "sum"
+          ],
+          "default": "single"
+        },
+        "empty": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "paused"
+          ],
+          "default": "unknown"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 256,
+                "default": ""
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "range",
+                  "timestamp"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "warningAfter": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$"
+              },
+              "criticalAfter": {
+                "$ref": "#/definitions/adapter-prometheus/properties/assertions/items/properties/warningAfter"
+              },
+              "failureState": {
+                "type": "string",
+                "enum": [
+                  "warning",
+                  "critical"
+                ],
+                "default": "critical"
+              }
+            },
+            "required": [
+              "operator"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 20,
+          "default": []
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

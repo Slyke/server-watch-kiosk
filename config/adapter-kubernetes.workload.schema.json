@@ -1,0 +1,46 @@
+{
+  "$ref": "#/definitions/adapter-kubernetes.workload",
+  "definitions": {
+    "adapter-kubernetes.workload": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "name": {
+          "$ref": "#/definitions/adapter-kubernetes.workload/properties/namespace"
+        },
+        "zeroReplicas": {
+          "type": "string",
+          "enum": [
+            "paused",
+            "unknown"
+          ],
+          "default": "paused"
+        },
+        "restartWarning": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 5
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "Deployment",
+            "StatefulSet",
+            "DaemonSet"
+          ]
+        }
+      },
+      "required": [
+        "namespace",
+        "name",
+        "kind"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

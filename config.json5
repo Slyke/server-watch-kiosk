@@ -1,0 +1,26 @@
+{
+  schemaVersion: 1,
+  server: { host: '0.0.0.0', port: 8098 },
+  runtime: { interval: '30s', timeout: '5s', staleAfter: '120s', failureAfter: '30s', recoveryAfter: '30s' },
+  uiDefaults: {
+    // Default theme: reference (example_pics), dark/light (Phox), contrast, tron.
+    // Each browser can override this in Options → Theme.
+    theme: 'reference',
+    autoDiagnostics: true,
+    sortMode: 'severity',
+    splitRatio: 0.60,
+    optionsEnabled: true,
+    customOrders: {},
+  },
+  plugins: {
+    directory: './checks',
+    enabled: [],
+    allowHotReload: true,
+    watch: false,
+  },
+  sources: {},
+  checks: {},
+  services: [],
+  // Offline fixtures: no upstream connections or module imports.
+  demo: { enabled: true, scenario: 'mixed' },
+}

@@ -1,0 +1,145 @@
+{
+  "$ref": "#/definitions/adapter-http",
+  "definitions": {
+    "adapter-http": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "default": {}
+        },
+        "headerRefs": {
+          "$ref": "#/definitions/adapter-http/properties/headers"
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "caFile": {
+              "type": "string"
+            },
+            "certFile": {
+              "type": "string"
+            },
+            "keyFile": {
+              "type": "string"
+            },
+            "rejectUnauthorized": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "expectedStatus": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "minItems": 1
+        },
+        "followRedirects": {
+          "type": "boolean",
+          "default": false
+        },
+        "expectedContentType": {
+          "type": "string"
+        },
+        "authFailureIsCritical": {
+          "type": "boolean",
+          "default": false
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 256,
+                "default": ""
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "range",
+                  "timestamp"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "warningAfter": {
+                "type": "string",
+                "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$"
+              },
+              "criticalAfter": {
+                "$ref": "#/definitions/adapter-http/properties/assertions/items/properties/warningAfter"
+              },
+              "failureState": {
+                "type": "string",
+                "enum": [
+                  "warning",
+                  "critical"
+                ],
+                "default": "critical"
+              }
+            },
+            "required": [
+              "operator"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 20,
+          "default": []
+        },
+        "warningLatency": {
+          "$ref": "#/definitions/adapter-http/properties/assertions/items/properties/warningAfter"
+        },
+        "criticalLatency": {
+          "$ref": "#/definitions/adapter-http/properties/assertions/items/properties/warningAfter"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "HEAD"
+          ],
+          "default": "GET"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

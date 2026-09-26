@@ -1,0 +1,29 @@
+{
+  schemaVersion: 1,
+  server: { host: '0.0.0.0', port: 8098 },
+  demo: { enabled: false },
+  uiDefaults: { theme: 'dark', optionsEnabled: true, autoDiagnostics: true },
+  plugins: { directory: '../checks', enabled: ['custom.example'], allowHotReload: true },
+  sources: {},
+  checks: {
+    gateway: {
+      type: 'http',
+      params: {
+        url: '${READINESS_URL}',
+        expectedStatus: [200],
+        expectedContentType: 'application/json',
+        assertions: [{ path: 'ready', operator: 'eq', value: true }],
+        // headerRefs: { Authorization: 'gatewayAuthorization' },
+      },
+    },
+    custom: {
+      type: 'custom.example',
+      params: { target: '${CUSTOM_READINESS_URL}' },
+      allowPresentation: true,
+    },
+  },
+  services: [
+    { id: 'gateway', name: 'Gateway', group: 'Infrastructure', checks: [{ id: 'gateway' }] },
+    { id: 'custom', name: 'Custom integration', group: 'Applications', checks: [{ id: 'custom' }] },
+  ],
+}

@@ -1,0 +1,604 @@
+{
+  "$ref": "#/definitions/config",
+  "definitions": {
+    "config": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "server": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string",
+              "default": "0.0.0.0"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": 8098
+            },
+            "requestLimit": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 65536,
+              "default": 16384
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "interval": {
+              "type": "string",
+              "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$",
+              "default": "30s"
+            },
+            "timeout": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "5s"
+            },
+            "staleAfter": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "120s"
+            },
+            "failureAfter": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "30s"
+            },
+            "recoveryAfter": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "30s"
+            },
+            "futureTolerance": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "30s"
+            },
+            "pollInterval": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "5s"
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64,
+              "default": 8
+            },
+            "diagnosticsConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16,
+              "default": 4
+            },
+            "diagnosticsTimeout": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "5s"
+            },
+            "diagnosticsBudget": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "15s"
+            },
+            "diagnosticsCache": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "5s"
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "uiDefaults": {
+          "type": "object",
+          "properties": {
+            "theme": {
+              "type": "string",
+              "enum": [
+                "reference",
+                "dark",
+                "light",
+                "contrast",
+                "tron"
+              ],
+              "default": "reference"
+            },
+            "autoDiagnostics": {
+              "type": "boolean",
+              "default": true
+            },
+            "sortMode": {
+              "type": "string",
+              "enum": [
+                "severity",
+                "name",
+                "custom"
+              ],
+              "default": "severity"
+            },
+            "splitRatio": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 0.8,
+              "default": 0.6
+            },
+            "optionsEnabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "customOrders": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+                },
+                "maxItems": 1000
+              },
+              "propertyNames": {
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "default": {}
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "concurrency": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 32,
+                    "default": 4
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "kubernetes"
+                  },
+                  "kubeconfigFile": {
+                    "type": "string"
+                  },
+                  "inCluster": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "context": {
+                    "type": "string"
+                  },
+                  "namespaces": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "type",
+                  "namespaces"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "concurrency": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/0/properties/concurrency"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "http"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "default": {}
+                  },
+                  "headerRefs": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/headers"
+                  },
+                  "tls": {
+                    "type": "object",
+                    "properties": {
+                      "caFile": {
+                        "type": "string"
+                      },
+                      "certFile": {
+                        "type": "string"
+                      },
+                      "keyFile": {
+                        "type": "string"
+                      },
+                      "rejectUnauthorized": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "concurrency": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/0/properties/concurrency"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "prometheus"
+                  },
+                  "url": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/url"
+                  },
+                  "headers": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/headers"
+                  },
+                  "headerRefs": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/headers"
+                  },
+                  "tls": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/tls"
+                  }
+                },
+                "required": [
+                  "type",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "concurrency": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/0/properties/concurrency"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "postgres"
+                  },
+                  "host": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "default": 5432
+                  },
+                  "database": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "usernameRef": {
+                    "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                  },
+                  "passwordRef": {
+                    "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                  },
+                  "tls": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/tls"
+                  },
+                  "maxRows": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "default": 100
+                  }
+                },
+                "required": [
+                  "type",
+                  "host",
+                  "database",
+                  "usernameRef",
+                  "passwordRef"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "concurrency": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/0/properties/concurrency"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "mqtt"
+                  },
+                  "url": {
+                    "type": "string",
+                    "pattern": "^mqtts?:\\/\\/"
+                  },
+                  "usernameRef": {
+                    "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                  },
+                  "passwordRef": {
+                    "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                  },
+                  "tls": {
+                    "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/tls"
+                  },
+                  "topics": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "type",
+                  "url",
+                  "topics"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+          },
+          "default": {}
+        },
+        "plugins": {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string",
+              "default": "./checks"
+            },
+            "enabled": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+              },
+              "maxItems": 100,
+              "default": []
+            },
+            "allowHotReload": {
+              "type": "boolean",
+              "default": false
+            },
+            "watch": {
+              "type": "boolean",
+              "default": false
+            },
+            "importTimeout": {
+              "$ref": "#/definitions/config/properties/runtime/properties/interval",
+              "default": "5s"
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "source": {
+                "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                },
+                "maxItems": 16,
+                "default": []
+              },
+              "interval": {
+                "$ref": "#/definitions/config/properties/runtime/properties/interval"
+              },
+              "timeout": {
+                "$ref": "#/definitions/config/properties/runtime/properties/interval"
+              },
+              "staleAfter": {
+                "$ref": "#/definitions/config/properties/runtime/properties/interval"
+              },
+              "failureAfter": {
+                "$ref": "#/definitions/config/properties/runtime/properties/interval"
+              },
+              "recoveryAfter": {
+                "$ref": "#/definitions/config/properties/runtime/properties/interval"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
+              },
+              "secretRefs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                },
+                "maxItems": 32,
+                "default": []
+              },
+              "allowPresentation": {
+                "type": "boolean",
+                "default": false
+              },
+              "params": {
+                "type": "object",
+                "additionalProperties": {},
+                "default": {}
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "propertyNames": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+          },
+          "default": {}
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "group": {
+                "type": "string",
+                "maxLength": 128,
+                "default": "Services"
+              },
+              "priority": {
+                "type": "number",
+                "default": 0
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
+              },
+              "maintenance": {
+                "type": "boolean",
+                "default": false
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                    },
+                    "required": {
+                      "type": "boolean",
+                      "default": true
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100,
+                "default": []
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "serviceId": {
+                      "$ref": "#/definitions/config/properties/uiDefaults/properties/customOrders/additionalProperties/items"
+                    },
+                    "required": {
+                      "type": "boolean",
+                      "default": true
+                    }
+                  },
+                  "required": [
+                    "serviceId"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100,
+                "default": []
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "maxLength": 128
+                    },
+                    "url": {
+                      "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/1/properties/url"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 10,
+                "default": []
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1000,
+          "default": []
+        },
+        "demo": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "scenario": {
+              "type": "string",
+              "enum": [
+                "mixed",
+                "failure",
+                "recovery",
+                "collector-disconnect",
+                "api-disconnect"
+              ],
+              "default": "mixed"
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        }
+      },
+      "required": [
+        "schemaVersion"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

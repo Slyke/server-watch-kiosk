@@ -1,0 +1,136 @@
+{
+  "$ref": "#/definitions/check-result",
+  "definitions": {
+    "check-result": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "healthy",
+            "warning",
+            "critical",
+            "unknown",
+            "paused"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eventAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "graphql",
+                  "ping",
+                  "tcp",
+                  "dns",
+                  "mqtt",
+                  "prometheus",
+                  "postgres",
+                  "kubernetes",
+                  "custom"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "message": {
+                "$ref": "#/definitions/check-result/properties/reason"
+              },
+              "statusCode": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              },
+              "durationMs": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "label"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "measurements": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              }
+            ]
+          }
+        },
+        "presentation": {
+          "type": "object",
+          "properties": {
+            "background": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "foreground": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "border": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 8
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "text": {
+              "$ref": "#/definitions/check-result/properties/reason"
+            },
+            "textMode": {
+              "type": "string",
+              "enum": [
+                "truncate",
+                "wrap"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

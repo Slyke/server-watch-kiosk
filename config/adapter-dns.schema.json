@@ -1,0 +1,42 @@
+{
+  "$ref": "#/definitions/adapter-dns",
+  "definitions": {
+    "adapter-dns": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-zA-Z0-9_.:[\\]-]+$"
+        },
+        "resolver": {
+          "type": "string"
+        },
+        "recordType": {
+          "type": "string",
+          "enum": [
+            "A",
+            "AAAA",
+            "CNAME",
+            "TXT",
+            "MX",
+            "NS"
+          ],
+          "default": "A"
+        },
+        "expected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

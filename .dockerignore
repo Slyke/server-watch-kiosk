@@ -1,0 +1,16 @@
+.git
+node_modules
+dist
+.local
+.env
+.env.*
+secrets.json5
+**/secrets.json5
+*.kubeconfig
+*.pem
+*.key
+example_pics
+test-results
+playwright-report
+tests
+kiosk-service-board-spec.md
