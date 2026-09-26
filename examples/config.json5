@@ -1,0 +1,38 @@
+// Integration template: adapt table names, fields, addresses and thresholds to your systems.
+// Environment substitutions are whole strings; numeric values stay explicit JSON numbers.
+{
+  schemaVersion: 1,
+  server: { host: '0.0.0.0', port: 8098 },
+  runtime: { interval: '5s', timeout: '4s', staleAfter: '120s', failureAfter: '30s', recoveryAfter: '30s' },
+  uiDefaults: { theme: 'dark', optionsEnabled: true, autoDiagnostics: true },
+  plugins: {
+    directory: './plugins', allowHotReload: true, watch: false,
+    enabled: ['custom.fetch-json', 'custom.mqtt-telemetry', 'custom.postgres-freshness', 'custom.modbus-register', 'custom.graphql-health', 'custom.prometheus-value'],
+  },
+  sources: {
+    broker: { type: 'mqtt', url: '${MQTT_URL}', topics: ['site/telemetry'] },
+    database: { type: 'postgres', host: '${PG_HOST}', database: 'telemetry', usernameRef: 'dbUser', passwordRef: 'dbPassword', maxRows: 5 },
+    metrics: { type: 'prometheus', url: '${PROMETHEUS_URL}' },
+  },
+  checks: {
+    api: { type: 'custom.fetch-json', secretRefs: ['apiToken'], allowPresentation: true, params: { url: '${API_URL}', timestampPath: 'updatedAt', tokenRef: 'apiToken' } },
+    temperature: { type: 'custom.mqtt-telemetry', source: 'broker', allowPresentation: true, params: { source: 'broker', topic: 'site/telemetry', warning: 60, critical: 80 } },
+    import: { type: 'custom.postgres-freshness', source: 'database', allowPresentation: true, params: {
+      source: 'database', query: 'SELECT last_success_at FROM service_heartbeats WHERE service = $1',
+      values: ['demo-import'], warningSeconds: 30, criticalSeconds: 60,
+    } },
+    register: { type: 'custom.modbus-register', allowPresentation: true, params: { host: '${MODBUS_HOST}', port: 502, unitId: 1, address: 100, functionCode: 4, scale: 0.1, warning: 60, critical: 80 } },
+    graphql: { type: 'custom.graphql-health', params: { url: '${GRAPHQL_URL}', query: 'query { health { ready } }' } },
+    queue: { type: 'custom.prometheus-value', source: 'metrics', params: { source: 'metrics', query: 'lab_queue_depth', warning: 50, critical: 100 } },
+  },
+  services: [
+    { id: 'pipeline', name: 'Import pipeline', group: 'Composite example', checks: [{ id: 'api' }, { id: 'import' }, { id: 'queue', required: false }] },
+    { id: 'api', name: 'Fetch JSON', group: 'Examples', checks: [{ id: 'api' }] },
+    { id: 'mqtt', name: 'MQTT telemetry', group: 'Examples', checks: [{ id: 'temperature' }] },
+    { id: 'postgres', name: 'Postgres freshness', group: 'Examples', checks: [{ id: 'import' }] },
+    { id: 'modbus', name: 'Modbus register', group: 'Examples', checks: [{ id: 'register' }] },
+    { id: 'graphql', name: 'GraphQL health', group: 'Examples', checks: [{ id: 'graphql' }] },
+    { id: 'prometheus', name: 'Prometheus value', group: 'Examples', checks: [{ id: 'queue' }] },
+  ],
+  demo: { enabled: false },
+}

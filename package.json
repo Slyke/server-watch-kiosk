@@ -17,7 +17,8 @@
     "schema": "tsx scripts/write-schemas.ts",
     "error-add": "node scripts/error_gen.cjs --action add --error-file ./src/server/logging/errors.json",
     "error-validate": "node scripts/error_gen.cjs --action validate --error-file ./src/server/logging/errors.json",
-    "test:docker": "tsx --test tests/docker/*.test.ts"
+    "test:docker": "tsx --test tests/docker/*.test.ts",
+    "test:examples": "tsx --test tests/examples.test.ts"
   },
   "dependencies": {
     "@kubernetes/client-node": "2.0.0",

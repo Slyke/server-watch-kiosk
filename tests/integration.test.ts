@@ -86,6 +86,14 @@ test('demo API is offline, bounded and keeps secrets out of status/metrics/probe
     assert.ok(!JSON.stringify(status).includes(secret.values.auth)); assert.equal(board.plugins.workers.size, 0);
     const metrics = await (await fetch(url + '/metrics')).text(); assert.ok(!metrics.includes('service_board_service_state'));
     const probe = await (await fetch(url + '/readyz')).json(); assert.equal(probe.ok, true); assert.ok(probe.correlation_id); assert.equal(probe.service, 'service-watcher-kiosk');
+    const live = await fetch(url + '/livez'); const liveBody = await live.json();
+    assert.equal(live.status, 200); assert.equal(liveBody.ok, true);
+    assert.equal(live.headers.get('x-correlation-id'), liveBody.correlation_id);
+    board.scheduler.initialized = false;
+    const notReady = await fetch(url + '/readyz');
+    assert.equal(notReady.status, 500); assert.equal((await notReady.json()).ok, false);
+    assert.equal((await fetch(url + '/livez')).status, 200);
+    board.scheduler.initialized = true;
     assert.equal((await fetch(url + '/api/v1/services/garmin/diagnostics/logs?pod=arbitrary')).status, 400);
     assert.equal((await fetch(url + '/api/v1/services/garmin/diagnostics/logs?lines=2001')).status, 400);
     assert.equal((await fetch(url + '/api/v1/services/garmin/diagnostics/probes?url=http://example.com')).status, 400);

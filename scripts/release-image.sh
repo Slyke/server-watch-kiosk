@@ -5,7 +5,7 @@ set -euo pipefail
 test -z "$(git status --porcelain)" || { echo "Release requires a clean working tree" >&2; exit 1; }
 version="$(node -p "require('./package.json').version")"
 sha="$(git rev-parse --short=12 HEAD)"
-docker build --build-arg BUILD_HASH="$sha" -t "$IMAGE:$version-$sha" .
+docker build --build-arg BUILD_HASH="$sha" --build-arg BUILD_VERSION="$version" -t "$IMAGE:$version-$sha" .
 docker tag "$IMAGE:$version-$sha" "$IMAGE:$version"
 docker tag "$IMAGE:$version-$sha" "$IMAGE:latest"
 if [[ "${PUBLISH:-false}" == true ]]; then

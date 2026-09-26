@@ -6,7 +6,9 @@ RUN npm ci
 
 FROM dependencies AS build
 ARG BUILD_HASH=unknown
+ARG BUILD_VERSION
 ENV BUILD_HASH=${BUILD_HASH}
+ENV BUILD_VERSION=${BUILD_VERSION}
 COPY tsconfig.json tsconfig.server.json vite.config.ts svelte.config.js index.html ./
 COPY src ./src
 COPY public ./public

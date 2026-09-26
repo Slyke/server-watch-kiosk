@@ -1,0 +1,63 @@
+name: service-watcher-kiosk-examples
+services:
+  board:
+    build:
+      context: ../..
+      args:
+        BUILD_HASH: ${BUILD_HASH:-unknown}
+        BUILD_VERSION: ${BUILD_VERSION:-examples}
+    image: service-watcher-kiosk:examples
+    init: true
+    ports: ["127.0.0.1:${EXAMPLES_PORT:-8131}:8098"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      CONFIG_FILE: /app/config.json5
+      SECRETS_FILE: /run/secrets/secrets.json5
+    volumes:
+      - ./config.json5:/app/config.json5:ro
+      - ./secrets.example.json5:/run/secrets/secrets.json5:ro
+      - ../plugins:/app/checks:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mqtt: { condition: service_started }
+      fixtures: { condition: service_started }
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 128
+  fixtures:
+    image: service-watcher-kiosk:examples
+    pull_policy: never
+    init: true
+    command: ["node", "examples/lab/fixtures.mjs"]
+    volumes:
+      - ..:/app/examples:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      mqtt: { condition: service_started }
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 192m
+  mqtt:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: board_lab
+      POSTGRES_PASSWORD: admin-lab-only
+    volumes:
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-lab.sql:ro
+    # All lab data is intentionally discarded when the container stops.
+    tmpfs: ["/var/lib/postgresql/data:rw,size=128m"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d board_lab"]
+      interval: 2s
+      timeout: 2s
+      retries: 20

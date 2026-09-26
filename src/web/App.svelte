@@ -5,7 +5,10 @@
   import { automaticPane, currentServices, sortedServices, moveService, type Pane } from './state.js';
   import { preferences, savePreferences, type Preferences } from './preferences.js';
   import t from './i18n/en-US.json';
+  import { screenWakeLock, type WakeState } from './wake-lock.js';
   import { SnapshotSchema } from '../shared/snapshot-schema.js';
+  let wake = $state<ReturnType<typeof screenWakeLock> | null>(null);
+  let wakeState = $state<WakeState>('off');
   let snapshot = $state<Snapshot | null>(null);
   let receivedAt = $state(0); let clock = $state(0); let connected = $state(false); let initialError = $state('');
   let prefs = $state<Preferences | null>(null); let pane = $state<Pane>({ owner: 'closed', selected: null, tracked: [] });
@@ -49,11 +52,13 @@
     if (alive) pollTimer = setTimeout(() => { void schedulePoll(); }, Math.max(1000, snapshot?.pollMs ?? 5000));
   };
   onMount(() => {
+    wake = screenWakeLock({ onState: state => { wakeState = state; } });
     alive = true; width = window.innerWidth; clock = performance.now();
     void schedulePoll();
     const ticker = setInterval(() => { clock = performance.now(); }, 1000);
-    return () => { alive = false; clearTimeout(pollTimer); clearInterval(ticker); statusController?.abort(); };
+    return () => { wake?.destroy(); alive = false; clearTimeout(pollTimer); clearInterval(ticker); statusController?.abort(); };
   });
+  $effect(() => { wake?.setEnabled({ value: Boolean(prefs?.keepAwake && snapshot?.mode === 'live') }); });
   $effect(() => {
     if (snapshot) document.documentElement.dataset.theme = prefs?.themeOverride ?? snapshot.ui.theme;
   });
@@ -269,6 +274,9 @@
           </select>
         </label>
         <label class="check-label"><input type="checkbox" checked={prefs.dense} onchange={(event) => { if (prefs) { prefs.dense = event.currentTarget.checked; persist(); } }}>{t['board-density']}</label>
+        <label class="check-label"><input type="checkbox" checked={prefs.keepAwake} onchange={(event) => { if (prefs) { prefs.keepAwake = event.currentTarget.checked; persist(); } }}>{t['board-keep-awake']}</label>
+        <p class="muted" role="status">{snapshot?.mode === 'demo' ? t['board-wake-demo'] : t[`board-wake-${wakeState}`]}</p>
+        {#if snapshot?.mode === 'live' && prefs.keepAwake && (wakeState === 'denied' || wakeState === 'released')}<button onclick={() => wake?.retry()}>{t['board-wake-retry']}</button>{/if}
         <label class="check-label"><input type="checkbox" bind:checked={pollingPaused} onchange={() => { if (!pollingPaused) void refresh(); }}>{t['board-pause']}</label>
         <button disabled={runtimeBusy} onclick={() => { void runtimeAction({ action: 'refresh' }); }}>{t['board-refresh']}</button>
       </section>

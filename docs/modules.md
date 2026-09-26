@@ -75,3 +75,5 @@ Optional `dispose({context})` runs during graceful shutdown with a short deadlin
 Hot reload is opt-in in config. The Options sidebar reloads installed modules or toggles file watching. Replacements are validated in fresh workers, old observations become unknown and in-flight results are discarded. Unsupported output becomes unknown with a sanitized error. Adding enabled types and dependencies requires config/image changes and restart.
 
 Examples: [readiness](../checks/custom.example.mjs), [Garmin timestamp query](../checks/custom.garmin.mjs), [Kubernetes through Prometheus](../checks/custom.kubernetes-prometheus.mjs). Garmin's actual schema/query must be supplied by the operator; no personal health records are requested or returned.
+
+A complete [examples gallery](../examples/README.md) includes MQTT, Postgres, fetch/JSON, Modbus TCP, GraphQL and Prometheus modules, configuration/secrets templates, and a disposable local protocol lab.

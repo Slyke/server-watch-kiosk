@@ -80,9 +80,15 @@ Required inputs roll up critical → unknown → warning → healthy. Optional f
 
 ## Runtime options and modules
 
-`uiDefaults.optionsEnabled` controls the Options sidebar and runtime API. It contains compact cells, pause browser updates, refresh checks, module watch/reload, and demo scenarios. `plugins.allowHotReload` enables module controls; `plugins.watch` starts watching at boot. Runtime toggles are memory-only and reset at restart.
+`uiDefaults.optionsEnabled` controls the Options sidebar and runtime API. It contains theme overrides, compact cells, keep-screen-awake status, pause browser updates, refresh checks, module watch/reload, and demo scenarios. `plugins.allowHotReload` enables module controls; `plugins.watch` starts watching at boot. Server runtime toggles are memory-only and reset at restart; browser display preferences persist in local storage.
 
 Reloads replace isolated workers, invalidate old health/diagnostics, validate the new schema and discard pre-reload results. File changes for already enabled modules can be watched. Adding/removing enabled types or changing inventory/config/secrets still requires a restart. Config files are never edited in the browser. [Module SDK and examples](./docs/modules.md) describe declarative card overrides and diagnostic extensions.
+
+See [kiosk display and screen sleep](./docs/kiosk.md) for browser wake locks, HTTPS requirements and OS logout limitations.
+
+## Example plugins
+
+The [examples gallery](./examples/README.md) includes MQTT, Postgres, fetch/JSON, Modbus TCP, GraphQL and Prometheus modules with complete config/secrets templates. The [local protocol lab](./examples/lab/README.md) exercises all six without production credentials or devices.
 
 ## Diagnostics, API and operations
 
@@ -91,6 +97,15 @@ See [API and operational limits](./docs/operations.md). Logs are fetched only fo
 Prefer running outside the monitored cluster so a cluster outage does not remove the board. External hosts need routable Kubernetes, MQTT, database and Prometheus addresses; ClusterIP and `*.svc.cluster.local` addresses do not normally work outside the cluster. No live endpoints are assumed or probed by the demo.
 
 The optional [Kubernetes examples](./deploy/k8s) contain a Deployment, Service, ConfigMap, optional Secret mount and namespace-scoped read-only RBAC. Review and adapt them in your normal deployment workflow. No live cluster resources are modified.
+
+## Probes
+
+`GET /livez` returns HTTP 200 when the process and listener can answer, without contacting upstream services. `GET /readyz` returns HTTP 200 once configuration and the scheduler are initialized, or HTTP 500 when not ready. Both include `ok`, service/probe names, version, build hash and matching correlation metadata. A monitored target outage leaves both probes healthy because displaying outages is the board's job.
+
+```sh
+curl -f http://localhost:8098/livez
+curl -f http://localhost:8098/readyz
+```
 
 ## Verification and release
 
@@ -111,6 +126,35 @@ node scripts/smoke-container.mjs service-watcher-kiosk:local
 Browser tests create their own offline test configuration and use port 8128. Backend integration tests use ephemeral local servers, a simulated MQTT broker and isolated workers; they need no production credentials. The separate Docker test starts and removes a disposable Postgres container to verify read-only transactions, bound values, row limits and cancellation. Fixtures cover all five states, 34 services, stale Garmin import, 503/429, observer failures, retained MQTT replay, logs/containers/events and recovery/API outage scenarios.
 
 Build metadata is generated at build time and included in startup logs, /livez and /readyz. Monitored outages do not fail readiness because monitored targets are not dependencies for serving this board. Following the newer styleguide, process probes are /livez and /readyz; the spec's older /healthz alias is intentionally omitted. JSON5, named orders and hot reload also supersede the original handoff's YAML/restart-only sections.
+
+### Tag, build and publish
+
+Run from a clean committed checkout, with Git origin and both registry logins configured. Replace the account and registry placeholders. This publishes tags only when you run it:
+
+```sh
+USERNAME=yourusername
+DOMAIN=yourdomain.xyz
+IMAGE_NAME=service-watcher-kiosk
+# VERSION="dev"
+VERSION=v0.1.0
+
+git tag -a "$VERSION" -m "$VERSION"
+git push origin "$VERSION"
+# git push --force origin "$VERSION"
+
+SHA=$(git rev-parse --short=12 HEAD)
+
+docker build --build-arg BUILD_HASH="$SHA" --build-arg BUILD_VERSION="$VERSION" -t "$IMAGE_NAME:build" -f ./Dockerfile .
+
+for TAG in latest "$VERSION" "$VERSION-$SHA"; do
+  docker tag "$IMAGE_NAME:build" "$USERNAME/$IMAGE_NAME:$TAG"
+  docker tag "$IMAGE_NAME:build" "$DOMAIN/$USERNAME/$IMAGE_NAME:$TAG"
+  docker push "$USERNAME/$IMAGE_NAME:$TAG"
+  docker push "$DOMAIN/$USERNAME/$IMAGE_NAME:$TAG"
+done
+```
+
+`BUILD_VERSION` and `BUILD_HASH` are embedded into the image and used by startup logs and both probes. Deploy the `VERSION-SHA` tag for an exact rollback target. Prefer a new version over force-moving a published tag.
 
 Use [scripts/release-image.sh](./scripts/release-image.sh) from a clean committed tree. Set IMAGE; it builds version/hash, version and latest tags. Only `PUBLISH=true` pushes them. Deploy the immutable version/hash tag. No image publishing is done during implementation.
 

@@ -53,5 +53,15 @@
   "board-theme-dark": "Dark",
   "board-theme-light": "Light",
   "board-theme-contrast": "High contrast",
-  "board-theme-tron": "Tron"
+  "board-theme-tron": "Tron",
+  "board-keep-awake": "Keep screen awake",
+  "board-wake-off": "Screen sleep follows device settings.",
+  "board-wake-hidden": "Screen lock released while the board is hidden.",
+  "board-wake-requesting": "Requesting screen wake lock…",
+  "board-wake-active": "Screen wake lock is active.",
+  "board-wake-unsupported": "Screen wake lock needs a supported browser and HTTPS (or localhost).",
+  "board-wake-denied": "The browser or device declined the screen wake lock.",
+  "board-wake-released": "The browser or device released the screen wake lock.",
+  "board-wake-demo": "Screen wake lock starts in live mode.",
+  "board-wake-retry": "Retry screen wake lock"
 }
