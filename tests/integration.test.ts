@@ -15,11 +15,54 @@ import { executeBuiltin } from '../src/server/checks.js';
 import { readHttp } from '../src/server/network.js';
 import { builtinSchemas } from '../src/server/config.js';
 import { KubeConfig } from '@kubernetes/client-node';
+import { isLocalRequest } from '../src/server/access.js';
 
 const secret = { schemaVersion: 1 as const, values: { auth: 'top-secret-value' } };
 const logger = createLogger({ secrets: secret });
 const listen = async (server: http.Server) => { server.listen(0, '127.0.0.1'); await once(server, 'listening'); return 'http://127.0.0.1:' + (server.address() as { port: number }).port; };
 const close = async (server: http.Server) => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); };
+// Node's fetch normalizes Host; use a real HTTP request to exercise hostile Host/forwarded headers.
+const wireFetch = (url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) => new Promise<Response>((resolve, reject) => {
+  const request = http.request(url, { method: init.method, headers: init.headers }, response => {
+    const chunks: Buffer[] = [];
+    response.on('data', chunk => chunks.push(chunk));
+    response.on('end', () => resolve(new Response(Buffer.concat(chunks).toString('utf8'), { status: response.statusCode })));
+    response.on('error', reject);
+  });
+  request.on('error', reject); request.end(init.body);
+});
+test('LAN status access excludes evidence, credentials and all diagnostic/runtime routes', async () => {
+  const board = await createBoard({ config: ConfigSchema.parse({ schemaVersion: 1, demo: { enabled: false }, checks: { check: { type: 'tcp', params: { host: '127.0.0.1', port: 1 } } }, services: [{ id: 'service', name: 'Service', checks: [{ id: 'check' }], links: [{ label: 'Internal', url: 'http://private.example/' }] }] }), secrets: secret });
+  board.scheduler.close();
+  board.health.record({ id: 'check', result: { state: 'healthy', reason: 'Ready ' + secret.values.auth, evidence: [{ kind: 'custom', label: 'private', message: 'private-evidence' }], measurements: { private: 'private-measurement' } } });
+  const server = http.createServer(board.app); const url = await listen(server);
+  const headers = { host: 'board.lan', 'x-forwarded-for': '127.0.0.1', 'x-forwarded-host': 'localhost' };
+  try {
+    const remote = await wireFetch(url + '/api/v1/status', { headers });
+    assert.equal(remote.status, 200);
+    const data = await remote.json(); const encoded = JSON.stringify(data);
+    assert.equal(data.ui.diagnosticsEnabled, false); assert.equal(data.ui.optionsEnabled, false);
+    assert.equal(data.ui.autoDiagnostics, false); assert.deepEqual(data.sources, []);
+    for (const hidden of ['private-evidence', 'private-measurement', 'private.example', secret.values.auth]) assert.ok(!encoded.includes(hidden));
+    assert.equal(data.services[0].checks[0].reason, 'Ready [REDACTED]');
+    for (const route of ['/api/v1/runtime', '/api/v1/services/service/diagnostics', '/api/v1/services/service/diagnostics/logs', '/api/v1/services/service/diagnostics/description', '/metrics', '/config.json5', '/secrets.json5', '/API/v1/runtime']) {
+      assert.equal((await wireFetch(url + route, { headers })).status, 403, route);
+    }
+    assert.equal((await wireFetch(url + '/api/v1/runtime', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: '{"action":"refresh"}' })).status, 403);
+    assert.equal((await wireFetch(url + '/api/v1/status', { method: 'POST', headers })).status, 403);
+    assert.equal((await wireFetch(url + '/livez', { headers })).status, 200);
+    const local = await (await fetch(url + '/api/v1/status')).json();
+    assert.equal(local.ui.diagnosticsEnabled, true);
+    assert.equal(local.services[0].checks[0].evidence[0].message, 'private-evidence');
+    assert.equal((await fetch(url + '/api/v1/services/service/diagnostics/checks')).status, 200);
+    for (const address of ['10.7.1.2', '::ffff:10.7.1.2', '127.0.0.1.evil']) {
+      assert.equal(isLocalRequest({ socket: { remoteAddress: address }, headers: { host: 'localhost:8098', 'x-forwarded-for': '127.0.0.1' } } as any), false);
+    }
+    for (const host of ['localhost.evil:8098', '10.7.102.91:8098']) {
+      assert.equal(isLocalRequest({ socket: { remoteAddress: '127.0.0.1' }, headers: { host } } as any), false);
+    }
+  } finally { await board.close(); await close(server); }
+});
 test('HTTP and GraphQL contracts: redirect, auth, errors, JSON shape and stream limits', async () => {
   const server = http.createServer((req, res) => {
     if (req.url === '/redirect') { res.writeHead(302, { location: '/ready' }); res.end(); return; }

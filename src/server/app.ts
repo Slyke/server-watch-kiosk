@@ -13,6 +13,7 @@ import { Diagnostics } from './diagnostics.js';
 import { Demo, demoConfig } from '../demo/fixtures.js';
 import { createLogger } from './logging.js';
 import { type Snapshot, iso, ms } from '../shared/contracts.js';
+import { isLocalRequest, statusOnlyPath, statusOnlySnapshot, unlockVerifier } from './access.js';
 
 export const buildInfo = () => {
   const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -24,9 +25,10 @@ const querySchema = z.object({
   previous: z.enum(['true', 'false']).optional(), lines: z.coerce.number().int().min(1).max(2000).optional(),
   sinceSeconds: z.coerce.number().int().min(1).max(86400).optional(), discover: z.enum(['true', 'false']).optional(),
 }).strict();
-export const createBoard = async ({ config: input, secrets }: { config: Config; secrets: Secrets }) => {
+export const createBoard = async ({ config: input, secrets, unlockCode = process.env.SERVICE_BOARD_UNLOCK_CODE ?? '' }: { config: Config; secrets: Secrets; unlockCode?: string }) => {
   const config = input.demo.enabled ? demoConfig({ base: input }) : input;
-  const logger = createLogger({ secrets }); const info = buildInfo();
+  const unlock = unlockVerifier(unlockCode);
+  const logger = createLogger({ secrets: { ...secrets, values: { ...secrets.values, serviceBoardUnlockCode: unlockCode } } }); const info = buildInfo();
   const kubernetesMetadata = Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith('K8S_') && v));
   logger.info('SERVICE_BOOT_DIAGNOSTICS', 'Service Board starting', { ...info, nodeVersion: process.version, mode: config.demo.enabled ? 'demo' : 'live', ...(process.env.LOG_K8S_METADATA_ENABLED === 'true' ? {} : { kubernetes: kubernetesMetadata }) });
   const health = new HealthEngine(config); const sources = new Sources(config, secrets, logger); const kubernetes = new Kubernetes(sources);
@@ -46,17 +48,37 @@ export const createBoard = async ({ config: input, secrets }: { config: Config; 
     if (req.path.startsWith('/api/') || req.path.endsWith('z')) res.set('cache-control', 'no-store');
     next();
   });
+  app.use((req, res, next) => {
+    const authorization = req.header('authorization');
+    const requiresCode = !isLocalRequest(req) || config.server.localLock;
+    res.locals.unlockedWithCode = requiresCode && unlock.accepts(authorization);
+    res.locals.unlockAvailable = requiresCode && unlock.enabled;
+    res.locals.statusOnly = requiresCode && !res.locals.unlockedWithCode;
+    res.set({ 'x-service-board-access': res.locals.unlockedWithCode ? 'code' : (res.locals.statusOnly ? 'status-only' : 'full'),
+      'x-service-board-unlock-available': String(res.locals.unlockAvailable) });
+    res.vary('Authorization'); res.vary('Host');
+    if (requiresCode && authorization !== undefined && !res.locals.unlockedWithCode) {
+      res.set('cache-control', 'no-store').status(401).json({ error: 'Invalid unlock code' }); return;
+    }
+    if (res.locals.statusOnly && !statusOnlyPath(req.method, req.path)) {
+      res.status(403).json({ error: 'Access is status-only; diagnostics and controls require a configured unlock code' }); return;
+    }
+    next();
+  });
   app.use(express.json({ limit: config.server.requestLimit }));
   const probe = (name: string, ok: boolean, res: express.Response) => res.status(ok ? 200 : 500).json({ service: 'service-watcher-kiosk', probe: name, ok, ...info, correlation_id: res.locals.correlationId });
   app.get('/livez', (_req, res) => { probe('liveness', true, res); });
   app.get('/readyz', (_req, res) => { probe('readiness', scheduler.initialized, res); });
+  app.get('/api/v1/access', (_req, res) => {
+    res.json({ fullAccess: !res.locals.statusOnly, unlockedWithCode: res.locals.unlockedWithCode, unlockAvailable: res.locals.unlockAvailable });
+  });
   app.get('/api/v1/status', (_req, res) => {
     if (demo?.scenario === 'api-disconnect') { res.status(503).json({ error: 'Simulated API disconnect', correlation_id: res.locals.correlationId }); return; }
     demo?.tick();
     const snapshot: Snapshot = { apiVersion: 1, instanceId, revision: ++revision, mode: demo ? 'demo' : 'live', generatedAt: iso(Date.now()), pollMs: ms(config.runtime.pollInterval), staleAfterMs: ms(config.runtime.staleAfter),
       services: health.services(), sources: demo ? [{ id: 'simulated', state: 'healthy', reason: 'Offline fixtures' }] : sources.snapshot(),
-      ui: { ...config.uiDefaults, allowHotReload: config.plugins.allowHotReload } };
-    const encoded = JSON.stringify(snapshot);
+      ui: { ...config.uiDefaults, diagnosticsEnabled: true, allowHotReload: config.plugins.allowHotReload } };
+    const encoded = JSON.stringify(logger.sanitize(res.locals.statusOnly ? statusOnlySnapshot(snapshot) : snapshot));
     if (Buffer.byteLength(encoded) > 4194304) { res.status(503).json({ error: 'Status snapshot exceeds configured capacity' }); return; }
     res.type('json').send(encoded);
   });

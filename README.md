@@ -92,7 +92,9 @@ The [examples gallery](./examples/README.md) includes MQTT, Postgres, fetch/JSON
 
 ## Diagnostics, API and operations
 
-See [API and operational limits](./docs/operations.md). Logs are fetched only for a selected service, bounded and rendered as text. Known configured secrets are redacted. Remote logs can still contain unknown sensitive data; this is an internal board with no application authentication, as requested.
+See [API and operational limits](./docs/operations.md). Logs are fetched only for a selected service, bounded and rendered as text. Known configured secrets are redacted. Remote logs can still contain unknown sensitive data; this is an internal board.
+
+Network clients always receive a read-only status view until unlocked. Set the optional `SERVICE_BOARD_UNLOCK_CODE` backend environment variable to enable an **Unlock** button for diagnostics and runtime controls. After validation, the code is remembered under `service-board.unlock-code` in browser local storage; **Lock UI** removes it. Every API request is checked by the server, and changing the code invalidates old saved codes. With no environment key, LAN unlocking is disabled. Localhost keeps full access by default; set `server.localLock: true` to require the same key locally. `server.remoteAccess: 'full'` is no longer accepted. Status summaries still disclose service names and monitored device states.
 
 Prefer running outside the monitored cluster so a cluster outage does not remove the board. External hosts need routable Kubernetes, MQTT, database and Prometheus addresses; ClusterIP and `*.svc.cluster.local` addresses do not normally work outside the cluster. No live endpoints are assumed or probed by the demo.
 

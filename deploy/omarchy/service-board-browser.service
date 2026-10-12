@@ -1,0 +1,15 @@
+[Unit]
+Description=Service Board fullscreen Chromium kiosk
+After=graphical-session.target service-board.service
+PartOf=graphical-session.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/curl --fail --silent --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:8098/readyz
+ExecStart=/usr/bin/chromium --class=service-board-kiosk --kiosk --ozone-platform=wayland --no-first-run --no-default-browser-check --disable-session-crashed-bubble --user-data-dir=%h/.local/state/service-board/chromium http://localhost:8098/?kiosk=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

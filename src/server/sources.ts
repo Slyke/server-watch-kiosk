@@ -6,9 +6,10 @@ import { Gate, MAX_BYTES } from './limits.js';
 import { readHttp, jsonBody, UpstreamError } from './network.js';
 import { type State, iso, ms } from '../shared/contracts.js';
 import type { Logger } from './logging.js';
+import { MqttStateHistory } from './mqtt-state.js';
 
 type Message = { payload: string; receiptAt: number; retained: boolean; epoch: number };
-type Broker = { client: MqttClient; connected: boolean; subscribed: boolean; epoch: number; messages: Map<string, Message> };
+type Broker = { client: MqttClient; connected: boolean; subscribed: boolean; epoch: number; messages: Map<string, Message>; history: MqttStateHistory };
 export class Sources {
   gates = new Map<string, Gate>(); pools = new Map<string, pg.Pool>(); brokers = new Map<string, Broker>();
   health = new Map<string, { state: State; reason: string; at: number }>();
@@ -82,9 +83,10 @@ export class Sources {
       const client = mqtt.connect(source.url, { username: source.usernameRef ? this.secrets.values[source.usernameRef] : undefined, password: source.passwordRef ? this.secrets.values[source.passwordRef] : undefined, reconnectPeriod: 5000, connectTimeout: 5000, resubscribe: false, clean: true,
         rejectUnauthorized: source.tls?.rejectUnauthorized ?? true, ca: source.tls?.caFile ? fs.readFileSync(source.tls.caFile) : undefined,
         cert: source.tls?.certFile ? fs.readFileSync(source.tls.certFile) : undefined, key: source.tls?.keyFile ? fs.readFileSync(source.tls.keyFile) : undefined });
-      const broker: Broker = { client, connected: false, subscribed: false, epoch: 0, messages: new Map() }; this.brokers.set(id, broker);
+      const history = new MqttStateHistory(source, () => this.logger.info('MQTT_STATE_HISTORY', 'MQTT state history could not be read or persisted', { source: id }));
+      const broker: Broker = { client, connected: false, subscribed: false, epoch: 0, messages: new Map(), history }; this.brokers.set(id, broker);
       client.on('connect', () => {
-        broker.connected = true; broker.subscribed = false; broker.epoch++; broker.messages.clear();
+        broker.connected = true; broker.subscribed = false; broker.epoch++; broker.messages.clear(); history.disconnect();
         if (!source.topics.length) { broker.subscribed = true; return; }
         client.subscribe(source.topics, { qos: 0 }, (err, granted) => {
           broker.subscribed = !err && Boolean(granted?.length === source.topics.length && granted.every(g => g.qos !== 128));
@@ -93,9 +95,11 @@ export class Sources {
       });
       client.on('message', (topic, payload, packet) => {
         if (!source.topics.includes(topic) || payload.length > MAX_BYTES) return;
-        broker.messages.set(topic, { payload: payload.toString('utf8'), receiptAt: Date.now(), retained: Boolean(packet.retain), epoch: broker.epoch });
+        const message = { payload: payload.toString('utf8'), receiptAt: Date.now(), retained: Boolean(packet.retain), epoch: broker.epoch };
+        broker.messages.set(topic, message);
+        history.ingest({ topic, ...message });
       });
-      const lost = () => { broker.connected = false; broker.subscribed = false; broker.messages.clear(); this.mark({ id, state: 'unknown', reason: 'MQTT observer disconnected' }); };
+      const lost = () => { broker.connected = false; broker.subscribed = false; broker.messages.clear(); history.disconnect(); this.mark({ id, state: 'unknown', reason: 'MQTT observer disconnected' }); };
       client.on('offline', lost); client.on('close', lost); client.on('error', lost);
     }
   };
@@ -105,6 +109,13 @@ export class Sources {
     const broker = this.brokers.get(source);
     if (!broker?.connected || !broker.subscribed) throw new UpstreamError('transport');
     return broker.messages.get(topic) ?? null;
+  };
+  mqttState = ({ source, key }: { source: string; key: string }) => {
+    const c = this.config.sources[source];
+    if (c?.type !== 'mqtt' || !Object.hasOwn(c.trackedStates, key)) throw new UpstreamError('invalid');
+    const broker = this.brokers.get(source);
+    if (!broker?.connected || !broker.subscribed) throw new UpstreamError('transport');
+    return broker.history.get(key);
   };
   snapshot = () => Object.keys(this.config.sources).map(id => {
     const broker = this.brokers.get(id);

@@ -27,6 +27,7 @@ export const PresentationSchema = z.object({
   border: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   icon: z.string().max(8).optional(), title: z.string().max(128).optional(),
   text: shortText.optional(), textMode: z.enum(['truncate', 'wrap']).optional(),
+  timestamp: z.object({ label: z.string().max(64), at: z.string().datetime({ offset: true }).nullable() }).strict().optional(),
 }).strict();
 export const CheckResultSchema = z.object({
   state: StateSchema, reason: shortText,
@@ -64,5 +65,5 @@ export type Snapshot = {
   apiVersion: 1; instanceId: string; revision: number; mode: 'demo' | 'live'; generatedAt: string;
   pollMs: number; staleAfterMs: number; services: ServiceView[];
   sources: { id: string; state: State; reason: string }[];
-  ui: { theme: string; optionsEnabled: boolean; allowHotReload: boolean; autoDiagnostics: boolean; sortMode: string; splitRatio: number; customOrders: Record<string, string[]> };
+  ui: { theme: string; optionsEnabled: boolean; diagnosticsEnabled?: boolean; allowHotReload: boolean; autoDiagnostics: boolean; sortMode: string; splitRatio: number; customOrders: Record<string, string[]> };
 };

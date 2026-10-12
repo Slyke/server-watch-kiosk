@@ -10,3 +10,5 @@ playwright-report/
 test-results/
 .local/
 build-info.json
+__pycache__/
+*.py[cod]

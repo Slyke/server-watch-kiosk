@@ -1,0 +1,18 @@
+[Unit]
+Description=Service Board monitoring backend
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/service-board/app
+EnvironmentFile=-%h/.config/service-board/unlock.env
+ExecStart=%h/.local/share/service-board/node/bin/node dist/server/main.js --config %h/.config/service-board/config.json5 --secrets %h/.config/service-board/secrets.json5 --live
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

@@ -7,6 +7,7 @@ import type { Sources } from './sources.js';
 import type { Kubernetes } from './kubernetes.js';
 import { assertValue, dataPath, timestampResult } from './assertions.js';
 import { readHttp, jsonBody, UpstreamError } from './network.js';
+import { nodeHealth, retryNodePing } from './node-health.js';
 
 export const mqttResult = ({ check, telemetry, lwt, now }: { check: CheckConfig; telemetry: { payload: string; retained: boolean; receiptAt: number } | null; lwt: { payload: string } | null; now: number }): CheckResult => {
   const p = check.params;
@@ -35,6 +36,12 @@ export const executeBuiltin = async ({ check, sources, kubernetes, signal, sourc
   const p = check.params as Record<string, any>; const now = Date.now();
   const success = (reason: string): CheckResult => ({ state: 'healthy', reason, observedAt: iso(Date.now()) });
   if (check.type.startsWith('kubernetes.')) return kubernetes.check({ check, signal });
+  if (check.type === 'network.node') {
+    const ping = retryNodePing({ signal, probe: () => executeBuiltin({ check: { ...check, type: 'ping', params: { host: p.host, samples: p.samples, warningLatency: p.warningLatency, criticalLoss: p.criticalLoss } }, sources, kubernetes, signal }) });
+    const api = p.apiPort === undefined ? undefined : executeBuiltin({ check: { ...check, type: 'tcp', params: { host: p.host, port: p.apiPort } }, sources, kubernetes, signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]) });
+    const [pingResult, apiResult] = await Promise.all([ping, api]);
+    return nodeHealth(pingResult, apiResult, p.apiPort);
+  }
   if (['http', 'graphql'].includes(check.type)) {
     const source = sources.config.sources[check.source ?? ''];
     const reusable = source?.type === 'http' ? source : undefined;

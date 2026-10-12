@@ -1,0 +1,264 @@
+--- Service.qml
++++ Service.qml
+@@ -1,6 +1,7 @@
+ import QtQuick
+ import Quickshell
+ import Quickshell.Io
++import Quickshell.Hyprland
+ import Quickshell.Services.Pam
+ import Quickshell.Wayland
+ import qs.Commons
+@@ -23,6 +24,18 @@
+   property bool passwordPamConfigured: false
+   property bool fingerprintConfigured: false
+   property bool previewVisible: false
++  // Presentation only: the existing session lock and PAM remain authoritative.
++  property bool kioskMode: false
++  property bool kioskPreview: false
++  property string kioskAddress: ""
++  property bool kioskIdleArmed: true
++  property int kioskIdleSeconds: 1800
++  property double lastWakeAt: 0
++  property var kioskInfo: null
++  property double kioskInfoAt: 0
++  readonly property bool kioskEligible: !!(kioskInfo
++    && kioskInfo.class === "service-board-kiosk"
++    && kioskInfo.fullscreen === 2 && realScreenCount() === 1)
+   property string enteredPassword: ""
+   property string pendingPassword: ""
+   property string failureMessage: ""
+@@ -145,6 +158,68 @@
+     return true
+   }
+ 
++  function beginKioskLock() {
++    if (locked) return true
++    kioskMode = kioskEligible && Date.now() - kioskInfoAt < 3000
++    kioskAddress = kioskMode ? String(kioskInfo.address) : ""
++    if (beginLock()) return true
++    kioskMode = false
++    kioskAddress = ""
++    return false
++  }
++
++  // Query the active window directly: this compositor version does not
++  // populate Quickshell's activeToplevel even while Chromium has focus.
++  Process {
++    id: kioskWindowCheck
++    command: ["hyprctl", "-j", "activewindow"]
++    stdout: StdioCollector { id: kioskWindowOutput; waitForEnd: true }
++    onExited: function(exitCode) {
++      if (root.locked) return
++      root.kioskInfo = null
++      if (exitCode !== 0) return
++      try {
++        var info = JSON.parse(kioskWindowOutput.text)
++        root.kioskInfo = {
++          class: info.class, fullscreen: info.fullscreen, address: info.address
++        }
++        root.kioskInfoAt = Date.now()
++      } catch (error) { root.kioskInfo = null }
++    }
++  }
++
++  Timer {
++    interval: 1000
++    running: !root.locked
++    repeat: true
++    triggeredOnStart: true
++    onTriggered: if (!kioskWindowCheck.running) kioskWindowCheck.running = true
++  }
++
++  // Ignore browser idle inhibitors: this measures actual human input.
++  IdleMonitor {
++    id: kioskIdle
++    enabled: !root.locked && root.kioskIdleArmed
++    timeout: root.kioskIdleSeconds
++    respectInhibitors: false
++  }
++
++  // Close the transparent view if a different window could become visible.
++  // The compositor lock remains held; only password authentication unlocks it.
++  Connections {
++    target: Hyprland
++    function onRawEvent(event) {
++      if (!root.kioskMode || !root.locked) return
++      var value = String(event.data || "").split(",")[0].replace(/^0x/, "")
++      var address = root.kioskAddress.replace(/^0x/, "")
++      if (event.name === "openwindow"
++          || (event.name === "closewindow" && value === address)
++          || (event.name === "activewindowv2" && value && value !== address)
++          || event.name === "fullscreen"
++          || event.name === "workspacev2") root.kioskMode = false
++    }
++  }
++
+   function finishUnlock() {
+     if (!root.locked && !lockRequested) return
+ 
+@@ -155,16 +230,23 @@
+     resetAuthenticationState()
+     idleBlankTimer.stop()
+     sessionLock.locked = false
++    kioskMode = false
++    kioskAddress = ""
+     logEvent("unlocked")
+     runWake()
+   }
+ 
+   function armBlankTimer() {
++    if (kioskMode) {
++      idleBlankTimer.stop()
++      return
++    }
+     idleBlankTimer.armedAt = Date.now()
+     idleBlankTimer.restart()
+   }
+ 
+   function runWake() {
++    if (kioskMode) lastWakeAt = Date.now()
+     if (!wakeProcess.running) wakeProcess.running = true
+     if (lockRequested) armBlankTimer()
+   }
+@@ -257,16 +339,19 @@
+         sessionLockStabilizeTimer.stop()
+         pendingSessionLockTimer.stop()
+         root.resetAuthenticationState()
++        root.kioskMode = false
++        root.kioskAddress = ""
+         root.runWake()
+       }
+     }
+ 
+     WlSessionLockSurface {
+       id: lockSurface
+-      color: Color.background
++      color: root.kioskMode && root.realScreenCount() === 1 ? "transparent" : Color.background
+ 
+       LockView {
+         id: lockView
++        kioskMode: root.kioskMode && root.realScreenCount() === 1
+         anchors.fill: parent
+         backgroundPath: root.backgroundPath
+         backgroundVersion: root.backgroundVersion
+@@ -305,6 +390,7 @@
+       failureMessage: ""
+       failedAttempts: 0
+       inputEnabled: false
++      kioskMode: root.kioskPreview
+       loadBackground: root.previewVisible
+       passwordText: ""
+     }
+@@ -512,7 +598,33 @@
+ 
+     function lock(): string {
+       if (!root.passwordPamConfigured) return "missing-pam"
+-      if (!root.locked && !root.beginLock()) return "failed"
++      if (!root.locked) {
++        root.kioskMode = false
++        root.kioskAddress = ""
++        if (!root.beginLock()) return "failed"
++      }
++      return "ok"
++    }
++
++    function lockKiosk(): string {
++      if (!root.passwordPamConfigured) return "missing-pam"
++      return root.beginKioskLock() ? "ok" : "failed"
++    }
++
++    function setKioskIdleSeconds(seconds: int): string {
++      if (seconds < 1 || seconds > 86400) return "invalid-timeout"
++      // Quickshell 0.3 can lose notification bindings on a live timeout
++      // change. Disable/re-enable across event-loop turns to re-subscribe.
++      root.kioskIdleArmed = false
++      root.kioskIdleSeconds = seconds
++      Qt.callLater(function() { root.kioskIdleArmed = true })
++      return "ok"
++    }
++
++    function previewKiosk(): string {
++      if (root.locked) return "locked"
++      root.kioskPreview = true
++      root.previewVisible = true
+       return "ok"
+     }
+ 
+@@ -523,6 +635,17 @@
+     function status(): string {
+       return JSON.stringify({
+         locked: root.locked,
++        kioskMode: root.kioskMode,
++        kioskEligible: root.kioskEligible,
++        kioskWindow: root.kioskInfo ? {
++          className: root.kioskInfo.class,
++          fullscreen: root.kioskInfo.fullscreen
++        } : null,
++        idleMonitorEnabled: kioskIdle.enabled,
++        idleMonitorSeconds: kioskIdle.timeout,
++        kioskIdle: kioskIdle.isIdle,
++        kioskIdleSeconds: root.kioskIdleSeconds,
++        lastWakeAt: root.lastWakeAt,
+         requested: root.lockRequested,
+         pending: root.pendingSessionLock,
+         sessionLocked: sessionLock.locked,
+@@ -537,6 +660,7 @@
+     }
+ 
+     function preview(): string {
++      root.kioskPreview = false
+       root.refreshBackground()
+       root.refreshFingerprintStatus()
+       root.previewVisible = true
+--- LockView.qml
++++ LockView.qml
+@@ -6,6 +6,7 @@
+ Item {
+   id: root
+ 
++  property bool kioskMode: false
+   property string backgroundPath: ""
+   property int backgroundVersion: 0
+   property bool fingerprintConfigured: false
+@@ -17,7 +18,7 @@
+   property string passwordText: ""
+   property bool syncingPasswordText: false
+ 
+-  readonly property string placeholderText: "Enter Password"
++  readonly property string placeholderText: kioskMode ? "Locked · Enter Password" : "Enter Password"
+   readonly property int fieldWidth: 381
+   readonly property int fieldHeight: 67
+   readonly property int outlineThickness: 3
+@@ -88,12 +89,12 @@
+ 
+   Rectangle {
+     anchors.fill: parent
+-    color: Color.background
++    color: root.kioskMode ? "transparent" : Color.background
+ 
+     Image {
+       id: wallpaper
+       anchors.fill: parent
+-      source: root.loadBackground ? root.fileUrl(root.backgroundPath) : ""
++      source: root.loadBackground && !root.kioskMode ? root.fileUrl(root.backgroundPath) : ""
+       fillMode: Image.PreserveAspectCrop
+       asynchronous: true
+       cache: false
+@@ -102,6 +103,7 @@
+     }
+ 
+     MultiEffect {
++      visible: !root.kioskMode
+       anchors.fill: wallpaper
+       source: wallpaper
+       autoPaddingEnabled: false
+@@ -123,7 +125,8 @@
+       id: inputField
+       width: root.fieldWidth
+       height: root.fieldHeight
+-      anchors.centerIn: parent
++      anchors.horizontalCenter: parent.horizontalCenter
++      y: root.kioskMode ? parent.height - height - 24 : (parent.height - height) / 2
+       color: Color.lock.background
+       borderSpec: root.inputBorderSpec
+       radius: Style.cornerRadius

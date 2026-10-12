@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { ServiceView, DiagnosticIndex, DiagnosticSection } from '../shared/contracts.js';
   import t from './i18n/en-US.json';
+  import { apiFetch } from './api.js';
   let { service, automatic = false, onmanual = () => {} }: { service: ServiceView; automatic?: boolean; onmanual?: () => void } = $props();
   let index = $state<DiagnosticIndex | null>(null);
   let tab = $state('checks'); let pod = $state(''); let container = $state('');
@@ -21,7 +22,7 @@
     const query = new URLSearchParams({ previous: String(previous), lines: String(lines) });
     if (pod) query.set('pod', pod); if (container) query.set('container', container);
     try {
-      const response = await fetch(`/api/v1/services/${encodeURIComponent(service.id)}/diagnostics/${tab}?${query}`, { signal: own.signal });
+      const response = await apiFetch(`/api/v1/services/${encodeURIComponent(service.id)}/diagnostics/${tab}?${query}`, { signal: own.signal });
       if (!response.ok) throw new Error('Evidence unavailable or selection changed. Refresh the service to try again.');
       const value = await response.json();
       if (requestGeneration !== generation || own.signal.aborted) return;
@@ -37,12 +38,12 @@
     index = null; section = null; tab = 'checks'; pod = ''; container = ''; error = ''; manualRevision = 0; discovering = true;
     const revision = manualRevision;
     try {
-      const response = await fetch(`/api/v1/services/${encodeURIComponent(id)}/diagnostics`, { signal: own.signal });
+      const response = await apiFetch(`/api/v1/services/${encodeURIComponent(id)}/diagnostics`, { signal: own.signal });
       if (!response.ok) throw new Error('Diagnostic choices unavailable');
       index = await response.json();
       pod = index?.pods[0]?.uid ?? ''; container = index?.pods[0]?.containers[0]?.name ?? '';
       if (automatic && !own.signal.aborted) {
-        const discovery = await fetch(`/api/v1/services/${encodeURIComponent(id)}/diagnostics?discover=true`, { signal: own.signal });
+        const discovery = await apiFetch(`/api/v1/services/${encodeURIComponent(id)}/diagnostics?discover=true`, { signal: own.signal });
         if (discovery.ok) {
           const found: DiagnosticIndex = await discovery.json();
           if (!own.signal.aborted && revision === manualRevision && found.preferred) {

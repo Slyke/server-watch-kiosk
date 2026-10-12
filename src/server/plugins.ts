@@ -146,10 +146,11 @@ export class Plugins {
       return this.sources.secrets.values[args.ref];
     }
     if (method.startsWith('logger.')) { this.logger.info('MODULE_LOG', String(args.message).slice(0, 1024), { type: check.type }); return null; }
-    if (['postgres.query', 'prometheus.query', 'mqtt.latest'].includes(method) && ![check.source, ...check.sources].includes(args.source)) throw new Error('Undeclared source');
+    if (['postgres.query', 'prometheus.query', 'mqtt.latest', 'mqtt.state'].includes(method) && ![check.source, ...check.sources].includes(args.source)) throw new Error('Undeclared source');
     if (method === 'postgres.query') return this.sources.queryPostgres({ ...args, signal });
     if (method === 'prometheus.query') return this.sources.queryPrometheus({ ...args, signal });
     if (method === 'mqtt.latest') return this.sources.latest(args);
+    if (method === 'mqtt.state') return this.sources.mqttState(args);
     if (method === 'http.getJson' || method === 'graphql.query') {
       const reply = await readHttp({ url: args.url, signal, headers: { ...(method === 'graphql.query' ? { 'content-type': 'application/json' } : {}), ...args.headers }, method: method === 'graphql.query' ? 'POST' : 'GET', body: method === 'graphql.query' ? JSON.stringify({ query: args.query, variables: args.variables }) : undefined });
       const body = jsonBody({ reply });

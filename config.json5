@@ -1,6 +1,8 @@
 {
   schemaVersion: 1,
-  server: { host: '0.0.0.0', port: 8098 },
+  // LAN always requires SERVICE_BOARD_UNLOCK_CODE for diagnostics and controls.
+  // Set localLock: true to require the same code on localhost too.
+  server: { host: '0.0.0.0', port: 8098, localLock: false },
   runtime: { interval: '30s', timeout: '5s', staleAfter: '120s', failureAfter: '30s', recoveryAfter: '30s' },
   uiDefaults: {
     // Default theme: reference (example_pics), dark/light (Phox), contrast, tron.

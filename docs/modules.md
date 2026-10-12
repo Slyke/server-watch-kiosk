@@ -45,6 +45,7 @@ All helpers are asynchronous JSON RPC to the parent; Dates cross as RFC3339 stri
 | context.postgres.query({source,query,values?}) | Read-only transaction, bound values, bounded rows/bytes |
 | context.prometheus.query({source,query}) | Configured source; module interprets result cardinality/freshness |
 | context.mqtt.latest({source,topic}) | Shared broker's exact subscribed topic or null; payload, receiptAt, retained and connection epoch |
+| context.mqtt.state({source,key}) | Configured tracked state or null; value, receivedAt and lastChangedAt (epoch milliseconds, or null until a change is observed) |
 
 Named-source helpers require the source in the check's `source` or `sources` list. Never supply secrets as plugin params; use declared secretRefs or source credentials. These declarations reduce accidental exposure, not what malicious Node code can access. Mounted files and normal container permissions remain the actual trust boundary.
 
@@ -63,6 +64,9 @@ A check must opt in with `allowPresentation: true` for these optional result.pre
 - title: a compact display title; the service ID and detail name remain stable.
 - text: replacement tile summary text.
 - textMode: truncate or wrap.
+- timestamp: `{label, at}` with a UTC/offset RFC3339 timestamp, or null when no
+  change has been observed. The browser renders `yyyy-mm-dd hh:mm:ss` in its own
+  timezone; it does not display the backend host's local time.
 
 These change tile presentation, not the health state, mandatory state label, selection outline or diagnostics. Expired/offline health removes overrides. With several overrides the most severe check wins; config order breaks ties. Choose readable foreground/background combinations.
 

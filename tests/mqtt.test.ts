@@ -24,16 +24,22 @@ test('managed MQTT connection checks SUBACK, clears replay on disconnect, and ne
     });
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const config = ConfigSchema.parse({ schemaVersion: 1, sources: { broker: { type: 'mqtt', url: 'mqtt://127.0.0.1:' + (server.address() as net.AddressInfo).port, topics: ['tele/device', 'lwt/device'] } } });
+  const config = ConfigSchema.parse({ schemaVersion: 1, sources: { broker: { type: 'mqtt', url: 'mqtt://127.0.0.1:' + (server.address() as net.AddressInfo).port, topics: ['tele/device', 'lwt/device'], trackedStates: { power3: { inputs: [{ topic: 'tele/device', field: 'POWER3' }], values: ['ON', 'OFF'], availabilityTopic: 'lwt/device' } } } } });
   const secrets = { schemaVersion: 1 as const, values: {} }; const sources = new Sources(config, secrets, createLogger({ secrets }));
   try {
     sources.startMqtt(); await until(() => Boolean(sources.brokers.get('broker')?.subscribed));
     connections[0]!.write(mqttPacket.generate({ cmd: 'publish', topic: 'tele/device', payload: '{"ready":true}', qos: 0, retain: true, dup: false }));
     await until(() => Boolean(sources.latest({ source: 'broker', topic: 'tele/device' })));
     assert.equal(sources.latest({ source: 'broker', topic: 'tele/device' })?.retained, true);
+    assert.equal(sources.mqttState({ source: 'broker', key: 'power3' }), null);
+    for (const value of ['OFF', 'ON', 'OFF']) connections[0]!.write(mqttPacket.generate({ cmd: 'publish', topic: 'tele/device', payload: JSON.stringify({ POWER3: value }), qos: 0, retain: false, dup: false }));
+    await until(() => sources.mqttState({ source: 'broker', key: 'power3' })?.lastChangedAt != null);
+    assert.equal(sources.mqttState({ source: 'broker', key: 'power3' })?.value, 'OFF');
+    assert.throws(() => sources.mqttState({ source: 'broker', key: 'undeclared' }));
     assert.throws(() => sources.latest({ source: 'broker', topic: 'undeclared' }));
     connections[0]!.destroy(); await until(() => !sources.brokers.get('broker')?.connected);
     assert.throws(() => sources.latest({ source: 'broker', topic: 'tele/device' }));
+    assert.throws(() => sources.mqttState({ source: 'broker', key: 'power3' }));
     deny = true; sources.brokers.get('broker')!.client.reconnect();
     await until(() => connections.length === 2 && packets.filter(cmd => cmd === 'subscribe').length === 2);
     await new Promise(resolve => setTimeout(resolve, 30));

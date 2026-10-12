@@ -7,7 +7,10 @@ export type PluginContext = {
   graphql: { query: (args: { url: string; query: string; variables?: Record<string, unknown>; signal?: AbortSignal }) => Promise<unknown> };
   postgres: { query: (args: { source: string; query: string; values?: unknown[] }) => Promise<Record<string, unknown>[]> };
   prometheus: { query: (args: { source: string; query: string }) => Promise<unknown> };
-  mqtt: { latest: (args: { source: string; topic: string }) => Promise<unknown> };
+  mqtt: {
+    latest: (args: { source: string; topic: string }) => Promise<unknown>;
+    state: (args: { source: string; key: string }) => Promise<{ value: string; receivedAt: number; lastChangedAt: number | null } | null>;
+  };
 };
 export type CheckModule = {
   apiVersion: 1; type: string; configSchema: Record<string, unknown>;

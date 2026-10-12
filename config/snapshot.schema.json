@@ -186,6 +186,31 @@
                             "truncate",
                             "wrap"
                           ]
+                        },
+                        "timestamp": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "at": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "at"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -421,6 +446,10 @@
             },
             "optionsEnabled": {
               "type": "boolean"
+            },
+            "diagnosticsEnabled": {
+              "type": "boolean",
+              "default": true
             },
             "allowHotReload": {
               "type": "boolean"

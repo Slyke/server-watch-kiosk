@@ -1,3 +1,5 @@
+/* Kiosk margin leaves room for periodic pixel shifts without clipping controls. */
+.app-shell.kiosk { margin: 6px; width: calc(100% - 12px); height: calc(100dvh - 12px); }
 /* Root-driven Phox tokens with saturated status fills for distance viewing. */
 :root {
   color-scheme: dark;
@@ -98,6 +100,7 @@ p { margin: .5rem 0; overflow-wrap: anywhere; }
 .tile-body { flex: 1; min-height: 0; overflow: hidden; }
 .tile-body p { font-size: 12px; line-height: 1.4; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tile.text-wrap .tile-name { -webkit-line-clamp: 3; }
+.tile.long-title .tile-name { -webkit-line-clamp: 3; }
 .tile.text-wrap .tile-body p { -webkit-line-clamp: 5; }
 .tile-footer { font-size: 11px; font-weight: 600; margin-top: auto; flex-wrap: wrap; row-gap: 3px; }
 .component-statuses { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; max-width: 100%; }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { transition, HealthEngine, aggregate } from '../src/server/health.js';
-import { ConfigSchema, validateConfig, resolveEnvironmentReferences } from '../src/server/config.js';
+import { ConfigSchema, validateConfig, resolveEnvironmentReferences, builtinSchemas } from '../src/server/config.js';
 import { assertValue, timestampResult } from '../src/server/assertions.js';
 import { CheckResultSchema, iso } from '../src/shared/contracts.js';
 import { mqttResult } from '../src/server/checks.js';
@@ -91,6 +91,34 @@ test('Kubernetes rollout, partitions, zero replicas, jobs and readiness', () => 
 });
 test('environment references use exact whole strings and preserve defined empty strings', () => {
   assert.deepEqual(resolveEnvironmentReferences({ value: { a: '${VALUE}', b: '${MISSING}', c: 'prefix-${VALUE}', d: ['${EMPTY}'] }, env: { VALUE: ' 12 ', EMPTY: '' } }), { a: ' 12 ', b: null, c: 'prefix-${VALUE}', d: [''] });
+});
+test('restart warnings expire after the quiet window, without masking current faults', () => {
+  const pod = (restartCount: number, ago: number) => ({ status: { phase: 'Running', conditions: [{ type: 'Ready', status: 'True' }], containerStatuses: [{ restartCount, lastState: { terminated: { finishedAt: iso(now - ago) } } }] } });
+  assert.equal(evaluatePods({ pods: [pod(6, 60000)], now }).state, 'warning');
+  assert.equal(evaluatePods({ pods: [pod(4, 60000)], now }).state, 'healthy');
+  assert.equal(evaluatePods({ pods: [pod(6, 3600000)], now }).state, 'healthy');
+  assert.equal(evaluatePods({ pods: [pod(60, 10 * 86400000)], now }).state, 'healthy');
+  assert.equal(evaluatePods({ pods: [pod(6, 3600000)], restartWarningWindow: '2h', now }).state, 'warning');
+  assert.equal(evaluatePods({ pods: [pod(6, -60000)], now }).state, 'healthy');
+  const unready = pod(6, 10 * 86400000); unready.status.conditions = [];
+  assert.equal(evaluatePods({ pods: [unready], now }).state, 'warning');
+  const crashing = { status: { containerStatuses: [{ state: { waiting: { reason: 'CrashLoopBackOff' } } }] } };
+  assert.equal(evaluatePods({ pods: [pod(6, 60000), crashing], now }).state, 'critical');
+  assert.equal(evaluatePods({ pods: [unready, { status: { phase: 'Failed' } }], now }).state, 'critical');
+});
+test('restart recency uses last termination or running start, never a count alone', () => {
+  const status: any = { restartCount: 6 };
+  const pods = [{ status: { conditions: [{ type: 'Ready', status: 'True' }], containerStatuses: [status] } }];
+  assert.equal(evaluatePods({ pods, now }).state, 'healthy');
+  status.state = { running: { startedAt: iso(now - 1000) } };
+  assert.equal(evaluatePods({ pods, now }).state, 'warning');
+  status.lastState = { terminated: { finishedAt: iso(now - 86400000) } };
+  assert.equal(evaluatePods({ pods, now }).state, 'healthy');
+  for (const type of ['kubernetes.pods', 'kubernetes.workload']) {
+    const params = type === 'kubernetes.pods' ? { namespace: 'test', selector: 'app=test' } : { namespace: 'test', name: 'test', kind: 'Deployment' };
+    assert.equal(builtinSchemas[type]!.parse(params).restartWarningWindow, '1h');
+    assert.equal(builtinSchemas[type]!.safeParse({ ...params, restartWarningWindow: '0s' }).success, false);
+  }
 });
 test('config rejects unknown keys, bad refs, durations, source types and malformed params', () => {
   assert.throws(() => ConfigSchema.parse({ schemaVersion: 1, mystery: true }));

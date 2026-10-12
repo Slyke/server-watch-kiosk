@@ -26,6 +26,15 @@
               "minimum": 1024,
               "maximum": 65536,
               "default": 16384
+            },
+            "remoteAccess": {
+              "type": "string",
+              "const": "status-only",
+              "default": "status-only"
+            },
+            "localLock": {
+              "type": "boolean",
+              "default": false
             }
           },
           "additionalProperties": false,
@@ -350,6 +359,65 @@
                       "maxLength": 256
                     },
                     "maxItems": 200
+                  },
+                  "trackedStates": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "inputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "topic": {
+                                "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/4/properties/topics/items"
+                              },
+                              "field": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 128
+                              }
+                            },
+                            "required": [
+                              "topic"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "minItems": 1,
+                          "maxItems": 8
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                          },
+                          "minItems": 2,
+                          "maxItems": 32
+                        },
+                        "availabilityTopic": {
+                          "$ref": "#/definitions/config/properties/sources/additionalProperties/anyOf/4/properties/topics/items"
+                        },
+                        "offlineValue": {
+                          "type": "string",
+                          "default": "Offline"
+                        }
+                      },
+                      "required": [
+                        "inputs",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+                    },
+                    "default": {}
+                  },
+                  "stateFile": {
+                    "type": "string"
                   }
                 },
                 "required": [

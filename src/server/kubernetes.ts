@@ -3,22 +3,30 @@ import type https from 'node:https';
 import type { CheckConfig } from './config.js';
 import type { Sources } from './sources.js';
 import { readHttp, jsonBody, UpstreamError } from './network.js';
-import { type CheckResult, type PodChoice, type DiagnosticSection, iso } from '../shared/contracts.js';
+import { type CheckResult, type PodChoice, type DiagnosticSection, iso, ms } from '../shared/contracts.js';
 import { timestampResult } from './assertions.js';
 
 type Resource = Record<string, any>;
 const plural: Record<string, string> = { Deployment: 'deployments', StatefulSet: 'statefulsets', DaemonSet: 'daemonsets', Job: 'jobs', CronJob: 'cronjobs' };
 const ownedBy = (resource: Resource, uids: Set<string>) => (resource.metadata?.ownerReferences ?? []).some((owner: Resource) => owner.controller !== false && uids.has(owner.uid));
-export const evaluatePods = ({ pods, restartWarning = 5, now = Date.now() }: { pods: Resource[]; restartWarning?: number; now?: number }): CheckResult => {
+export const evaluatePods = ({ pods, restartWarning = 5, restartWarningWindow = '1h', now = Date.now() }: { pods: Resource[]; restartWarning?: number; restartWarningWindow?: string; now?: number }): CheckResult => {
   if (!pods.length) return { state: 'unknown', reason: 'No matching pods' };
+  let warning: string | undefined;
   for (const pod of pods) {
     if (pod.status?.phase === 'Succeeded') continue;
     if (pod.status?.phase === 'Failed') return { state: 'critical', reason: 'Pod failed', observedAt: iso(now) };
     const statuses = [...(pod.status?.initContainerStatuses ?? []), ...(pod.status?.containerStatuses ?? [])];
     if (statuses.some(s => ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull'].includes(s.state?.waiting?.reason) || s.state?.terminated?.reason === 'OOMKilled')) return { state: 'critical', reason: 'Container cannot run or was OOM killed', observedAt: iso(now) };
-    if (!pod.status?.conditions?.some((c: Resource) => c.type === 'Ready' && c.status === 'True')) return { state: 'warning', reason: 'Pod waiting for readiness or scheduling', observedAt: iso(now) };
-    if (statuses.some(s => (s.restartCount ?? 0) >= restartWarning && (s.restartCount ?? 0) > 0)) return { state: 'warning', reason: 'Container restart threshold exceeded', observedAt: iso(now) };
+    if (!pod.status?.conditions?.some((c: Resource) => c.type === 'Ready' && c.status === 'True')) warning = 'Pod waiting for readiness or scheduling';
+    const recentRestart = statuses.some(s => {
+      if (!(s.restartCount > 0 && s.restartCount >= restartWarning)) return false;
+      // Kubernetes exposes a lifetime count and the latest termination, not a restart history.
+      const lastRestart = Date.parse(s.lastState?.terminated?.finishedAt ?? s.state?.running?.startedAt ?? '');
+      return Number.isFinite(lastRestart) && lastRestart <= now && now - lastRestart < ms(restartWarningWindow);
+    });
+    if (recentRestart) warning ??= `Container restart threshold reached; latest restart within ${restartWarningWindow}`;
   }
+  if (warning) return { state: 'warning', reason: warning, observedAt: iso(now) };
   return { state: 'healthy', reason: `All ${pods.length} pods ready or completed`, observedAt: iso(now) };
 };
 export const evaluateWorkload = ({ object, kind, zeroReplicas = 'paused', now = Date.now() }: { object: Resource; kind: string; zeroReplicas?: 'paused' | 'unknown'; now?: number }): CheckResult => {
@@ -72,10 +80,21 @@ export class Kubernetes {
     return body as Resource;
   };
   list = async ({ source, path, signal }: { source: string; path: string; signal: AbortSignal }): Promise<Resource[]> => {
-    const items: Resource[] = []; let continuation = '';
+    const items: Resource[] = []; let continuation = ''; let pageSize = 100;
     for (let page = 0; page < 50; page++) {
-      const suffix = new URLSearchParams({ limit: '100', ...(continuation ? { continue: continuation } : {}) });
-      const response = await this.get({ source, path: path + (path.includes('?') ? '&' : '?') + suffix, signal });
+      let response: Resource;
+      for (;;) {
+        const suffix = new URLSearchParams({ limit: String(pageSize), ...(continuation ? { continue: continuation } : {}) });
+        try {
+          response = await this.get({ source, path: path + (path.includes('?') ? '&' : '?') + suffix, signal });
+          break;
+        } catch (error) {
+          // Large pod/ReplicaSet specs can exceed the byte budget even with few objects.
+          // Retry the same continuation with a smaller page, preserving the byte limit.
+          if (!(error instanceof UpstreamError) || error.category !== 'limit' || pageSize === 1) throw error;
+          pageSize = Math.max(1, Math.floor(pageSize / 2));
+        }
+      }
       if (!Array.isArray(response.items)) throw new UpstreamError('invalid');
       items.push(...response.items); continuation = response.metadata?.continue ?? '';
       if (!continuation) return items;
@@ -110,7 +129,7 @@ export class Kubernetes {
     try {
       const p = check.params as Record<string, any>;
       const { objects, pods } = await this.inventory({ check, signal });
-      if (check.type === 'kubernetes.pods') return pods.length ? evaluatePods({ pods, restartWarning: p.restartWarning }) : { state: p.empty, reason: 'No pods match configured selection', observedAt: iso(Date.now()) };
+      if (check.type === 'kubernetes.pods') return pods.length ? evaluatePods({ pods, restartWarning: p.restartWarning, restartWarningWindow: p.restartWarningWindow }) : { state: p.empty, reason: 'No pods match configured selection', observedAt: iso(Date.now()) };
       const object = objects[0]!;
       if (check.type === 'kubernetes.job') {
         if (object.spec?.suspend) return { state: 'paused', reason: 'Job scheduling intentionally suspended', observedAt: iso(Date.now()) };
@@ -121,7 +140,7 @@ export class Kubernetes {
         return { state: 'unknown', reason: 'No successful job completion recorded' };
       }
       const result = evaluateWorkload({ object, kind: p.kind, zeroReplicas: p.zeroReplicas });
-      const podResult = evaluatePods({ pods, restartWarning: p.restartWarning });
+      const podResult = evaluatePods({ pods, restartWarning: p.restartWarning, restartWarningWindow: p.restartWarningWindow });
       return result.state === 'healthy' && podResult.state !== 'healthy' ? podResult : result;
     } catch (err) {
       return err instanceof UpstreamError && err.category === 'missing' ? { state: 'critical', reason: 'Configured Kubernetes object is missing', observedAt: iso(Date.now()) }
@@ -130,7 +149,7 @@ export class Kubernetes {
   };
   choices = ({ checkId, check, pods }: { checkId: string; check: CheckConfig; pods: Resource[] }): PodChoice[] => pods.filter(p => p.metadata?.uid).map(p => ({
     uid: `${check.source}:${p.metadata.uid}`, name: p.metadata.name, namespace: p.metadata.namespace, source: check.source!, checkId,
-    unhealthy: evaluatePods({ pods: [p] }).state !== 'healthy',
+    unhealthy: evaluatePods({ pods: [p], restartWarning: check.params.restartWarning as number | undefined, restartWarningWindow: check.params.restartWarningWindow as string | undefined }).state !== 'healthy',
     containers: [...(p.spec?.initContainers ?? []).map((c: Resource) => ({ ...c, init: true })), ...(p.spec?.containers ?? []).map((c: Resource) => ({ ...c, init: false }))].map(c => ({
       name: c.name, init: c.init, restarts: [...(p.status?.initContainerStatuses ?? []), ...(p.status?.containerStatuses ?? [])].find(s => s.name === c.name)?.restartCount ?? 0,
     })),

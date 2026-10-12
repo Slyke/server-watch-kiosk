@@ -9,12 +9,18 @@ const url = z.string().url().refine(v => { try { const parsed = new URL(v); retu
 const headers = z.record(z.string().max(4096)).default({});
 const tls = z.object({ caFile: z.string().optional(), certFile: z.string().optional(), keyFile: z.string().optional(), rejectUnauthorized: z.boolean().default(true) }).strict().optional();
 const sourceBase = { concurrency: z.number().int().min(1).max(32).default(4) };
+const mqttTopic = z.string().min(1).max(256).refine(v => !/[+#]/.test(v));
+const trackedState = z.object({
+  inputs: z.array(z.object({ topic: mqttTopic, field: z.string().min(1).max(128).optional() }).strict()).min(1).max(8),
+  values: z.array(z.string().min(1).max(128)).min(2).max(32),
+  availabilityTopic: mqttTopic.optional(), offlineValue: z.string().default('Offline'),
+}).strict();
 export const SourceSchema = z.discriminatedUnion('type', [
   z.object({ ...sourceBase, type: z.literal('kubernetes'), kubeconfigFile: z.string().optional(), inCluster: z.boolean().default(false), context: z.string().optional(), namespaces: z.array(z.string().min(1)).min(1) }).strict(),
   z.object({ ...sourceBase, type: z.literal('http'), url, headers, headerRefs: headers, tls }).strict(),
   z.object({ ...sourceBase, type: z.literal('prometheus'), url, headers, headerRefs: headers, tls }).strict(),
   z.object({ ...sourceBase, type: z.literal('postgres'), host: z.string().min(1), port: z.number().int().min(1).max(65535).default(5432), database: z.string().min(1), usernameRef: id, passwordRef: id, tls, maxRows: z.number().int().min(1).max(1000).default(100) }).strict(),
-  z.object({ ...sourceBase, type: z.literal('mqtt'), url: z.string().regex(/^mqtts?:\/\//), usernameRef: id.optional(), passwordRef: id.optional(), tls, topics: z.array(z.string().min(1).max(256).refine(v => !/[+#]/.test(v))).max(200) }).strict(),
+  z.object({ ...sourceBase, type: z.literal('mqtt'), url: z.string().regex(/^mqtts?:\/\//), usernameRef: id.optional(), passwordRef: id.optional(), tls, topics: z.array(mqttTopic).max(200), trackedStates: z.record(id, trackedState).refine(v => Object.keys(v).length <= 100).default({}), stateFile: z.string().optional() }).strict(),
 ]);
 export const AssertionSchema = z.object({
   path: z.string().max(256).default(''), operator: z.enum(['eq', 'gt', 'gte', 'lt', 'lte', 'range', 'timestamp']),
@@ -36,18 +42,20 @@ const requestParams = {
 };
 const host = z.string().min(1).max(253).regex(/^[a-zA-Z0-9_.:[\]-]+$/).refine(v => !v.startsWith('-'));
 const namespace = z.string().min(1).max(253);
-const workload = { namespace, name: namespace, zeroReplicas: z.enum(['paused', 'unknown']).default('paused'), restartWarning: z.number().int().nonnegative().default(5) };
+const restartPolicy = { restartWarning: z.number().int().nonnegative().default(5), restartWarningWindow: duration.refine(v => ms(v) > 0, 'Restart window must be positive').default('1h') };
+const workload = { namespace, name: namespace, zeroReplicas: z.enum(['paused', 'unknown']).default('paused'), ...restartPolicy };
 export const builtinSchemas: Record<string, z.ZodTypeAny> = {
   http: z.object({ ...requestParams, method: z.enum(['GET', 'HEAD']).default('GET') }).strict(),
   graphql: z.object({ ...requestParams, query: z.string().min(1).max(16000), variables: z.record(z.unknown()).default({}), allowPartialData: z.boolean().default(false) }).strict(),
   tcp: z.object({ host, port: z.number().int().min(1).max(65535) }).strict(),
   dns: z.object({ host, resolver: z.string().optional(), recordType: z.enum(['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'NS']).default('A'), expected: z.array(z.string()).optional() }).strict(),
   ping: z.object({ host, samples: z.number().int().min(1).max(5).default(3), warningLatency: duration.default('250ms'), criticalLoss: z.number().min(0).max(100).default(100) }).strict(),
+  'network.node': z.object({ host, apiPort: z.number().int().min(1).max(65535).optional(), samples: z.number().int().min(1).max(5).default(2), warningLatency: duration.default('250ms'), criticalLoss: z.number().min(0).max(100).default(100) }).strict(),
   prometheus: z.object({ query: z.string().min(1).max(16000), reduction: z.enum(['single', 'min', 'max', 'sum']).default('single'), empty: z.enum(['unknown', 'paused']).default('unknown'), assertions }).strict(),
   postgres: z.object({ query: z.string().min(1).max(16000), values: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(100).default([]), column: z.string().min(1), assertions }).strict(),
   mqtt: z.object({ topic: z.string().min(1), lwtTopic: z.string().optional(), offlineValue: z.string().default('Offline'), onlineValue: z.string().default('Online'), timestampPath: z.string().optional(), timestampFormat: z.enum(['rfc3339', 'epochSeconds', 'epochMilliseconds']).default('rfc3339'), warningAfter: duration.default('10m'), criticalAfter: duration.default('15m'), assertions }).strict(),
   'kubernetes.workload': z.object({ ...workload, kind: z.enum(['Deployment', 'StatefulSet', 'DaemonSet']) }).strict(),
-  'kubernetes.pods': z.object({ namespace, names: z.array(namespace).min(1).optional(), selector: z.string().min(1).optional(), empty: z.enum(['unknown', 'critical', 'paused']).default('unknown'), restartWarning: z.number().int().nonnegative().default(5) }).strict().refine(v => Boolean(v.names) !== Boolean(v.selector), 'Set exactly one of names or selector'),
+  'kubernetes.pods': z.object({ namespace, names: z.array(namespace).min(1).optional(), selector: z.string().min(1).optional(), empty: z.enum(['unknown', 'critical', 'paused']).default('unknown'), ...restartPolicy }).strict().refine(v => Boolean(v.names) !== Boolean(v.selector), 'Set exactly one of names or selector'),
   'kubernetes.job': z.object({ namespace, name: namespace, kind: z.enum(['Job', 'CronJob']).default('Job'), warningAfter: duration.optional(), criticalAfter: duration.default('24h') }).strict(),
 };
 const schedule = { interval: duration.optional(), timeout: duration.optional(), staleAfter: duration.optional(), failureAfter: duration.optional(), recoveryAfter: duration.optional() };
@@ -59,7 +67,7 @@ export const CheckSchema = z.object({
 const ref = z.object({ id, required: z.boolean().default(true) }).strict();
 export const ConfigSchema = z.object({
   schemaVersion: z.literal(1),
-  server: z.object({ host: z.string().default('0.0.0.0'), port: z.number().int().min(0).max(65535).default(8098), requestLimit: z.number().int().min(1024).max(65536).default(16384) }).strict().default({}),
+  server: z.object({ host: z.string().default('0.0.0.0'), port: z.number().int().min(0).max(65535).default(8098), requestLimit: z.number().int().min(1024).max(65536).default(16384), remoteAccess: z.literal('status-only').default('status-only'), localLock: z.boolean().default(false) }).strict().default({}),
   runtime: z.object({
     interval: duration.default('30s'), timeout: duration.default('5s'), staleAfter: duration.default('120s'),
     failureAfter: duration.default('30s'), recoveryAfter: duration.default('30s'), futureTolerance: duration.default('30s'), pollInterval: duration.default('5s'),
@@ -131,6 +139,9 @@ export const validateConfig = ({ config, secrets }: { config: Config; secrets: S
   if (config.plugins.enabled.some(type => builtinSchemas[type])) fail('plugins.enabled', 'Built-in types are reserved');
   for (const [sourceId, source] of Object.entries(config.sources)) {
     if (source.type === 'kubernetes' && Boolean(source.kubeconfigFile) === source.inCluster) fail(`sources.${sourceId}`, 'Set kubeconfigFile or inCluster, exclusively');
+    if (source.type === 'mqtt') for (const track of Object.values(source.trackedStates)) {
+      for (const topic of [...track.inputs.map(i => i.topic), ...(track.availabilityTopic ? [track.availabilityTopic] : [])]) if (!source.topics.includes(topic)) fail(`sources.${sourceId}.trackedStates`, 'Tracked topics must be explicitly subscribed');
+    }
   }
   for (const [checkId, check] of Object.entries(config.checks)) {
     const at = `checks.${checkId}`;

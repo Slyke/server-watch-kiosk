@@ -24,7 +24,7 @@ const context = {
   graphql: { query: ({ signal, ...args }) => rpc('graphql.query', args) },
   postgres: { query: (args) => rpc('postgres.query', args) },
   prometheus: { query: (args) => rpc('prometheus.query', args) },
-  mqtt: { latest: (args) => rpc('mqtt.latest', args) },
+  mqtt: { latest: (args) => rpc('mqtt.latest', args), state: (args) => rpc('mqtt.state', args) },
 };
 process.on('message', async (message) => {
   if (message.op === 'helperResult') {

@@ -1,0 +1,17 @@
+[Unit]
+Description=Kiosk 30-minute idle lock and 30-minute on / 5-minute panel rest
+After=graphical-session.target
+PartOf=graphical-session.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=KIOSK_ON_SECONDS=1800
+Environment=KIOSK_OFF_SECONDS=300
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:idle:handle-lid-switch --who=ServiceBoard --why=Unattended-monitoring-kiosk --mode=block /usr/bin/python3 %h/.local/share/service-board/app/deploy/omarchy/display-cycle.py
+Restart=always
+RestartSec=5
+ExecStopPost=/usr/share/omarchy/bin/omarchy-brightness-display on
+
+[Install]
+WantedBy=graphical-session.target

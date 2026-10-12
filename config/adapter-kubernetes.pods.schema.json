@@ -33,6 +33,11 @@
           "type": "integer",
           "minimum": 0,
           "default": 5
+        },
+        "restartWarningWindow": {
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h|d)$",
+          "default": "1h"
         }
       },
       "required": [
