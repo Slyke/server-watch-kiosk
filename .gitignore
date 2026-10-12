@@ -12,3 +12,5 @@ test-results/
 build-info.json
 __pycache__/
 *.py[cod]
+display-settings.json
+display-settings.json.tmp

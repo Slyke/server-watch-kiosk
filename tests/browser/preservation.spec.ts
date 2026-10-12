@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 test('manual tab, pod and container survive refresh and resize', async ({ page, request }) => {
   await request.post('/api/v1/runtime', { data: { action: 'scenario', scenario: 'mixed' } });
   await page.goto('/');

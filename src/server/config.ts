@@ -67,7 +67,7 @@ export const CheckSchema = z.object({
 const ref = z.object({ id, required: z.boolean().default(true) }).strict();
 export const ConfigSchema = z.object({
   schemaVersion: z.literal(1),
-  server: z.object({ host: z.string().default('0.0.0.0'), port: z.number().int().min(0).max(65535).default(8098), requestLimit: z.number().int().min(1024).max(65536).default(16384), remoteAccess: z.literal('status-only').default('status-only'), localLock: z.boolean().default(false) }).strict().default({}),
+  server: z.object({ host: z.string().default('0.0.0.0'), port: z.number().int().min(0).max(65535).default(8098), requestLimit: z.number().int().min(1024).max(65536).default(16384), remoteAccess: z.literal('status-only').default('status-only'), localLock: z.boolean().default(false), preferencesFile: z.string().min(1).optional() }).strict().default({}),
   runtime: z.object({
     interval: duration.default('30s'), timeout: duration.default('5s'), staleAfter: duration.default('120s'),
     failureAfter: duration.default('30s'), recoveryAfter: duration.default('30s'), futureTolerance: duration.default('30s'), pollInterval: duration.default('5s'),
@@ -199,5 +199,6 @@ export const loadConfig = ({ configFile, secretsFile, demo }: { configFile: stri
   if (demo !== undefined) config.demo.enabled = demo;
   const secrets = fs.existsSync(secretsFile) ? validate(SecretsSchema, parse(secretsFile), secretsFile) : { schemaVersion: 1 as const, values: {} };
   config.plugins.directory = path.resolve(path.dirname(configFile), config.plugins.directory);
+  config.server.preferencesFile = path.resolve(path.dirname(configFile), process.env.DISPLAY_SETTINGS_FILE ?? config.server.preferencesFile ?? 'display-settings.json');
   return { config: validateConfig({ config, secrets }), secrets };
 };

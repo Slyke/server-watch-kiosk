@@ -9,6 +9,7 @@
   import { SnapshotSchema } from '../shared/snapshot-schema.js';
   import { localTimestamp } from './time.js';
   import { apiFetch, readUnlockCode, saveUnlockCode, forgetUnlockCode, unlockStorageKey } from './api.js';
+  import { displaySettingsKeys, type DisplaySettings, type DisplaySettingsState } from '../shared/display-settings.js';
   let wake = $state<ReturnType<typeof screenWakeLock> | null>(null);
   let wakeState = $state<WakeState>('off');
   let snapshot = $state<Snapshot | null>(null);
@@ -23,6 +24,9 @@
   let backdropDown = false;
   let kiosk = $state(false);
   let unlockAvailable = $state(false); let unlockedWithCode = $state(false);
+  let statusOnly = $state(true);
+  let displayedSettings: DisplaySettings | null = null; let settingsRevision = -1; let settingsInstance = '';
+  let settingsPending = 0; let settingsQueue = Promise.resolve();
   let unlockOpen = $state(false); let unlockDraft = $state(''); let unlockMessage = $state(''); let unlockBusy = $state(false);
   let pixelShift = $state({ x: 0, y: 0 });
   const icons: Record<string, string> = { healthy: '■', warning: '▲', critical: '×', unknown: '?', paused: 'Ⅱ' };
@@ -36,7 +40,33 @@
   const diagnosticsEnabled = $derived(Boolean(snapshot && snapshot.ui.diagnosticsEnabled !== false));
   const narrow = $derived(width < 680);
   const split = $derived(Math.min(Math.max(prefs?.splitRatio ?? 0.6, 280 / Math.max(1, width - 8)), 1 - 320 / Math.max(1, width - 8)));
-  const persist = () => { if (prefs) savePreferences({ value: prefs, storage: storage() }); };
+  const applySharedSettings = (state: DisplaySettingsState) => {
+    if (!prefs) return;
+    prefs = { ...prefs, ...state.value };
+    displayedSettings = structuredClone(state.value); settingsRevision = state.revision;
+    savePreferences({ value: prefs, storage: storage() });
+  };
+  const persist = () => {
+    if (!prefs) return;
+    savePreferences({ value: prefs, storage: storage() });
+    if (statusOnly || !snapshot?.ui.optionsEnabled || !displayedSettings) return;
+    const next = Object.fromEntries(displaySettingsKeys.map(key => [key, prefs![key]])) as DisplaySettings;
+    const patch = Object.fromEntries(displaySettingsKeys.filter(key => JSON.stringify(next[key]) !== JSON.stringify(displayedSettings![key])).map(key => [key, next[key]]));
+    if (!Object.keys(patch).length) return;
+    displayedSettings = JSON.parse(JSON.stringify(next));
+    const body = JSON.stringify(patch); settingsPending++;
+    settingsQueue = settingsQueue.then(async () => {
+      try {
+        const response = await apiFetch('/api/v1/preferences', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error('Settings update failed');
+        const state: DisplaySettingsState = await response.json();
+        if (settingsPending === 1) { applySharedSettings(state); runtimeMessage = ''; }
+      } catch {
+        settingsRevision = -1;
+        runtimeMessage = 'Display settings could not be saved. Try again.'; layoutMessage = runtimeMessage;
+      } finally { settingsPending--; }
+    });
+  };
   const manual = () => { if (paneOpen) { pane = { ...pane, owner: 'manual' }; if (prefs) { prefs.manualPaneOpen = true; persist(); } } };
   const refresh = async () => {
     if (pollingPaused) return;
@@ -55,10 +85,14 @@
       snapshot = value; receivedAt = started; clock = performance.now(); connected = true; initialError = '';
       unlockAvailable = response.headers.get('x-service-board-unlock-available') === 'true';
       unlockedWithCode = response.headers.get('x-service-board-access') === 'code';
+      statusOnly = response.headers.get('x-service-board-access') === 'status-only';
       document.documentElement.dataset.font = 'system-stack';
       if (!prefs) {
         prefs = preferences({ defaults: value.ui, storage: storage() });
         if (prefs.manualPaneOpen && value.ui.diagnosticsEnabled !== false) pane = { owner: 'manual', selected: sortedServices({ services: value.services, mode: 'severity' })[0]?.id ?? null, tracked: [] };
+      }
+      if (value.ui.sharedPreferences && !settingsPending && (settingsInstance !== value.instanceId || settingsRevision !== value.ui.sharedPreferences.revision)) {
+        settingsInstance = value.instanceId; applySharedSettings(value.ui.sharedPreferences);
       }
     } catch { if (!own.signal.aborted && alive) { connected = false; initialError = 'Unable to reach the board. Retrying automatically…'; } }
   };
@@ -242,17 +276,18 @@
     <span class:disconnected={!connected} class="refresh-age" role="status">{snapshot ? (connected ? t['board-last-refresh'] + ' ' + Math.max(0, Math.floor((clock - receivedAt) / 1000)) + 's ago' : 'Disconnected') : 'Connecting…'}</span>
     <div class="toolbar-actions">
       {#if prefs}
-        <label class="sort-control"><span class="sr-only">{t['board-sort-label']}</span><select aria-label={t['board-sort-label']} bind:value={prefs.sortMode} onchange={changeSort}><option value="severity">{t['board-sort-severity']}</option><option value="name">{t['board-sort-name']}</option><option value="custom">{t['board-sort-custom']}</option></select></label>
+        <label class="sort-control"><span class="sr-only">{t['board-sort-label']}</span><select disabled={statusOnly} aria-label={t['board-sort-label']} bind:value={prefs.sortMode} onchange={changeSort}><option value="severity">{t['board-sort-severity']}</option><option value="name">{t['board-sort-name']}</option><option value="custom">{t['board-sort-custom']}</option></select></label>
         {#if prefs.sortMode === 'custom'}
-          <select class="layout-select" aria-label="Custom layout" bind:value={prefs.customOrder} onchange={persist}>{#each Object.keys(prefs.customOrders) as name}<option value={name}>{name}</option>{/each}</select>
-          <button onclick={showLayout} aria-expanded={layoutOpen}>{t['board-layout-edit']}</button>
+          <select disabled={statusOnly} class="layout-select" aria-label="Custom layout" bind:value={prefs.customOrder} onchange={persist}>{#each Object.keys(prefs.customOrders) as name}<option value={name}>{name}</option>{/each}</select>
+          {#if !statusOnly}<button onclick={showLayout} aria-expanded={layoutOpen}>{t['board-layout-edit']}</button>{/if}
         {/if}
-        {#if diagnosticsEnabled}<label class="check-label auto-control"><input type="checkbox" bind:checked={prefs.autoDiagnostics} onchange={toggleAuto}>{t['board-auto']}</label>{/if}
+        {#if diagnosticsEnabled}<label class="check-label auto-control"><input disabled={statusOnly} type="checkbox" bind:checked={prefs.autoDiagnostics} onchange={toggleAuto}>{t['board-auto']}</label>{/if}
       {/if}
-      {#if diagnosticsEnabled}<button onclick={togglePane} aria-pressed={paneOpen}>{t['board-diagnostics']}</button>{:else}<span class="muted">Read-only status</span>{/if}
+      {#if diagnosticsEnabled}<button onclick={togglePane} aria-pressed={paneOpen}>{t['board-diagnostics']}</button>{/if}
+      {#if snapshot && statusOnly}<span class="muted">Read-only status</span>{/if}
       <button onclick={() => { void fullscreen(); }}>{t['board-fullscreen']}</button>
       {#if snapshot?.ui.optionsEnabled}<button onclick={showOptions} aria-expanded={optionsOpen}>{t['board-options']}</button>{/if}
-      {#if unlockAvailable && !diagnosticsEnabled}<button onclick={() => { void showUnlock(); }}>Unlock</button>{/if}
+      {#if unlockAvailable && statusOnly}<button onclick={() => { void showUnlock(); }}>Unlock</button>{/if}
       {#if unlockedWithCode}<button onclick={() => { void lockUi(); }}>Lock UI</button>{/if}
     </div>
   </header>
@@ -266,7 +301,7 @@
             class:selected={pane.selected === service.id && paneOpen} class:text-wrap={service.presentation?.textMode === 'wrap'}
             class:long-title={service.name.length > 30}
             style={cardStyle(service)} aria-label={service.name + ' · ' + t['board-' + service.state as keyof typeof t] + ' · ' + service.reason}
-            title={service.reason} draggable={prefs?.sortMode === 'custom'}
+            title={service.reason} draggable={!statusOnly && prefs?.sortMode === 'custom'}
             ondragstart={(event) => { dragId = service.id; event.dataTransfer?.setData('text/plain', service.id); }}
             ondragover={(event) => { if (prefs?.sortMode === 'custom') event.preventDefault(); }}
             ondrop={(event) => { event.preventDefault(); reorder({ id: dragId, before: service.id }); }}
@@ -305,7 +340,7 @@
           {#if failures.length}<label class="failure-picker"><span>{failures.length} failed</span><select aria-label="Failed service" value={failures.some(s => s.id === pane.selected) ? pane.selected ?? '' : ''} onchange={(e) => { pane = { owner: 'manual', selected: e.currentTarget.value, tracked: [] }; manual(); }}><option value="" disabled>Select failure</option>{#each failures as service}<option value={service.id}>{service.name}</option>{/each}</select></label>{:else}<span class="muted">{pane.owner === 'auto' ? 'Waiting for confirmed recovery' : t['board-diagnostics']}</span>{/if}
           <button class="close-button" onclick={closePane} aria-label={narrow ? t['board-return'] : 'Close diagnostics'} title="Closing disables Auto diagnostics">{narrow ? '← Grid' : '×'}</button>
         </div>
-        {#if selected}<Diagnostics service={selected} automatic={pane.owner === 'auto'} onmanual={manual} />{:else}<p>{t['board-no-selection']}</p>{/if}
+        {#if selected}<Diagnostics service={selected} restricted={statusOnly} automatic={pane.owner === 'auto'} onmanual={manual} />{:else}<p>{t['board-no-selection']}</p>{/if}
       </aside>
     {/if}
   </div>
@@ -316,7 +351,7 @@
   onclick={(event) => { if (backdropDown && event.target === dialog && outsideDialog(event)) closeModal(); backdropDown = false; }}
   onclose={() => { if (modalId) closeModal(); }} aria-label={modalService?.name ?? 'Service details'}>
   <button class="modal-close close-button" onclick={closeModal} aria-label="Close details">×</button>
-  {#if modalService}<Diagnostics service={modalService} />{/if}
+  {#if modalService}<Diagnostics service={modalService} restricted={statusOnly} />{/if}
 </dialog>
 
 {#if unlockOpen}
@@ -343,7 +378,7 @@
       {#if prefs.sortMode === 'custom'}<ol class="order-list">{#each sorted as service, index (service.id)}<li><span>{service.name}</span><div><button disabled={index === 0} aria-label={'Move ' + service.name + ' up'} title={'Move ' + service.name + ' up'} onclick={() => step(service.id, -1)}>↑</button><button disabled={index === sorted.length - 1} aria-label={'Move ' + service.name + ' down'} title={'Move ' + service.name + ' down'} onclick={() => step(service.id, 1)}>↓</button></div></li>{/each}</ol>{/if}
     {:else}
       <section class="option-section">
-        <h3>Display</h3>
+        <h3>Display</h3><p class="muted">Saved display settings apply to every browser.</p>
         <label>{t['board-theme']}
           <select value={prefs.themeOverride ?? ''} onchange={(event) => { if (prefs) { prefs.themeOverride = event.currentTarget.value as Theme || null; persist(); } }}>
             <option value="">{t['board-theme-default']}</option>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DisplaySettingsStateSchema } from './display-settings.js';
 import { CheckResultSchema, StateSchema, PresentationSchema, ThemeSchema } from './contracts.js';
 const timestamp = z.string().datetime({ offset: true });
 const boundedId = z.string().min(1).max(256);
@@ -22,5 +23,5 @@ export const SnapshotSchema = z.object({
     presentation: PresentationSchema.optional(), links: z.array(z.object({ label: z.string().max(128), url: z.string().url().refine(v => /^https?:\/\//.test(v)) })).max(10),
   })).max(1000),
   sources: z.array(z.object({ id: boundedId, state: StateSchema, reason: z.string().max(1024) })).max(1000),
-  ui: z.object({ theme: ThemeSchema, optionsEnabled: z.boolean(), diagnosticsEnabled: z.boolean().default(true), allowHotReload: z.boolean(), autoDiagnostics: z.boolean(), sortMode: z.enum(['severity', 'name', 'custom']), splitRatio: z.number().min(0.2).max(0.8), customOrders: z.record(z.array(boundedId).max(1000)) }),
+  ui: z.object({ theme: ThemeSchema, optionsEnabled: z.boolean(), diagnosticsEnabled: z.boolean().default(true), allowHotReload: z.boolean(), autoDiagnostics: z.boolean(), sortMode: z.enum(['severity', 'name', 'custom']), splitRatio: z.number().min(0.2).max(0.8), customOrders: z.record(z.array(boundedId).max(1000)), sharedPreferences: DisplaySettingsStateSchema.optional() }),
 });

@@ -24,18 +24,19 @@ const fixture = async (unlockCode: string, localLock = false) => {
     services: [{ id: 'service', name: 'Service', checks: [{ id: 'check' }] }],
   }), secrets: { schemaVersion: 1, values: {} }, unlockCode });
   board.scheduler.close();
-  board.health.record({ id: 'check', result: { state: 'healthy', reason: 'Ready', evidence: [{ kind: 'custom', label: 'private', message: 'Evidence ' + code }] } });
+  board.health.record({ id: 'check', result: { state: 'healthy', reason: 'Ready', evidence: [{ kind: 'http', label: 'private-probe-label', message: 'Evidence ' + code, durationMs: 125, statusCode: 200 }], measurements: { private: 'private-measurement' } } });
   const server = http.createServer(board.app); server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  return { url: 'http://127.0.0.1:' + (server.address() as { port: number }).port,
+  return { board, url: 'http://127.0.0.1:' + (server.address() as { port: number }).port,
     close: async () => { await board.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 };
 
-test('only the correct configured code grants LAN diagnostics and runtime access', async () => {
+test('only the correct configured code grants full LAN diagnostics and runtime access', async () => {
   const f = await fixture(code);
   try {
     const anonymous = await request(f.url, '/api/v1/status');
     assert.equal(anonymous.status, 200); assert.equal(anonymous.headers['x-service-board-access'], 'status-only');
-    assert.equal(JSON.parse(anonymous.text).ui.diagnosticsEnabled, false);
+    assert.equal(JSON.parse(anonymous.text).ui.diagnosticsEnabled, true);
+    assert.equal(JSON.parse(anonymous.text).ui.optionsEnabled, false);
     assert.ok(!anonymous.text.includes('Evidence'));
     assert.equal((await request(f.url, '/api/v1/runtime')).status, 403);
     const hints = await request(f.url, '/api/v1/access');
@@ -98,7 +99,7 @@ test('local locking is opt-in and LAN locking cannot be disabled', async () => {
         const hints = await request(f.url, '/api/v1/access', { host });
         assert.deepEqual(JSON.parse(hints.text), { fullAccess: false, unlockedWithCode: false, unlockAvailable: Boolean(configured) });
         assert.equal((await request(f.url, '/api/v1/runtime', { host })).status, 403);
-        assert.equal(JSON.parse((await request(f.url, '/api/v1/status', { host })).text).ui.diagnosticsEnabled, false);
+        assert.equal(JSON.parse((await request(f.url, '/api/v1/status', { host })).text).ui.diagnosticsEnabled, true);
         const auth = { host, authorization: 'Bearer ' + code };
         assert.equal((await request(f.url, '/api/v1/runtime', auth)).status, configured ? 200 : 401);
         if (configured) assert.deepEqual(JSON.parse((await request(f.url, '/api/v1/access', auth)).text),
@@ -107,4 +108,34 @@ test('local locking is opt-in and LAN locking cannot be disabled', async () => {
       }
     } finally { await f.close(); }
   }
+});
+
+test('locked diagnostics expose only checks and safe probe metadata, without private discovery or shared cache access', async () => {
+  const f = await fixture('', true);
+  let privateCalls = 0;
+  f.board.diagnostics.get = async () => { privateCalls++; throw new Error('Private diagnostics must not be called'); };
+  try {
+    for (const host of ['board.lan', 'localhost']) {
+      for (const query of ['', '?discover=true', '?pod=anything&container=anything&previous=true']) {
+        const index = await request(f.url, '/api/v1/services/service/diagnostics' + query, { host });
+        assert.equal(index.status, 200);
+        const parsed = JSON.parse(index.text);
+        assert.deepEqual(parsed.kinds, ['checks', 'probes']); assert.deepEqual(parsed.pods, []);
+        if (query.includes('discover')) assert.deepEqual(parsed.preferred, { kind: 'checks' });
+      }
+      for (const kind of ['checks', 'probes']) {
+        const response = await request(f.url, '/api/v1/services/service/diagnostics/' + kind, { host });
+        assert.equal(response.status, 200); assert.equal(response.headers['cache-control'], 'no-store');
+        const section = JSON.parse(response.text);
+        assert.equal(section.kind, kind); assert.match(section.text, /Ready/);
+        for (const privateValue of ['private-probe-label', 'private-measurement', 'Evidence', code]) assert.ok(!response.text.includes(privateValue), privateValue);
+        if (kind === 'probes') { assert.match(section.text, /"durationMs": 125/); assert.match(section.text, /"statusCode": 200/); }
+        assert.equal((await request(f.url, '/api/v1/services/service/diagnostics/' + kind, { host, 'content-type': 'application/json' }, '{}')).status, 403);
+      }
+      for (const kind of ['logs', 'description', 'events', 'message', 'probes/logs', '%6cogs']) {
+        assert.equal((await request(f.url, '/api/v1/services/service/diagnostics/' + kind, { host })).status, 403);
+      }
+    }
+    assert.equal(privateCalls, 0);
+  } finally { await f.close(); }
 });

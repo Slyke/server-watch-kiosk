@@ -23,8 +23,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 FROM node:24.21.0-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+ENV DISPLAY_SETTINGS_FILE=/var/lib/service-board/display-settings.json
 # ping is optional at runtime; NET_RAW is deliberately not granted by Compose.
 RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /var/lib/service-board && chown node:node /var/lib/service-board
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/build-info.json ./build-info.json

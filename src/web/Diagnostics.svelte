@@ -3,7 +3,7 @@
   import type { ServiceView, DiagnosticIndex, DiagnosticSection } from '../shared/contracts.js';
   import t from './i18n/en-US.json';
   import { apiFetch } from './api.js';
-  let { service, automatic = false, onmanual = () => {} }: { service: ServiceView; automatic?: boolean; onmanual?: () => void } = $props();
+  let { service, restricted = false, automatic = false, onmanual = () => {} }: { service: ServiceView; restricted?: boolean; automatic?: boolean; onmanual?: () => void } = $props();
   let index = $state<DiagnosticIndex | null>(null);
   let tab = $state('checks'); let pod = $state(''); let container = $state('');
   let previous = $state(false); let paused = $state(false); let follow = $state(true); let lines = $state(200);
@@ -55,7 +55,7 @@
     } catch (e) { if (!own.signal.aborted) error = e instanceof Error ? e.message : 'Diagnostics unavailable'; }
     finally { if (!own.signal.aborted) discovering = false; }
   };
-  $effect(() => { const id = service.id; if (id !== initializedId) { initializedId = id; untrack(() => { void initialize(id); }); } });
+  $effect(() => { const id = service.id; const key = `${id}:${restricted}`; if (key !== initializedId) { initializedId = key; untrack(() => { void initialize(id); }); } });
   onMount(() => {
     const timer = setInterval(() => { if (tab === 'logs' && !paused && !loading) void loadSection(); }, 5000);
     return () => { clearInterval(timer); controller?.abort(); discoveryController?.abort(); };

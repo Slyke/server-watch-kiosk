@@ -19,6 +19,7 @@ services:
     volumes:
       - ./config.json5:/app/config.json5:ro
       - ./checks:/app/checks:ro
+      - board-state:/var/lib/service-board
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
@@ -30,3 +31,5 @@ services:
     cpus: 2
     # If unprivileged ICMP is unavailable on the host, narrowly opt in:
     # cap_add: [NET_RAW]
+volumes:
+  board-state:

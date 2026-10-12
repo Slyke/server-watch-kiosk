@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test.beforeEach(async ({ request }) => {
   await request.post('/api/v1/runtime', { data: { action: 'scenario', scenario: 'mixed' } });

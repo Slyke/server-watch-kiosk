@@ -1,6 +1,6 @@
 # Kiosk display and screen sleep
 
-The live board requests a **screen wake lock** by default while its page is visible. **Options → Keep screen awake** enables/disables it per browser, and the adjacent status reports whether it was acquired, released, unsupported or denied. Offline demo mode does not request it.
+The live board requests a **screen wake lock** by default while its page is visible. **Options → Keep screen awake** sets the shared preference for every browser, and the adjacent status reports whether it was acquired, released, unsupported or denied. Offline demo mode does not request it.
 
 The page releases its lock when hidden, on teardown, or when the option is disabled. It requests a new lock when it becomes visible again. An OS/browser rejection or unsolicited release does not cause a busy retry loop; use **Retry screen wake lock** or return to the page to retry.
 
@@ -10,4 +10,4 @@ A granted screen lock asks the platform to keep the screen from dimming or locki
 
 **Full screen** changes browser display mode only. The screen wake lock is separate and does not require full screen. Pausing status updates also does not turn the display off.
 
-The theme override, compact layout, custom card orders and keep-awake preference are stored in the browser profile. Retain that profile across kiosk restarts. Clearing site storage restores server/default preferences.
+Theme, compact layout, named orders and keep-awake preferences are saved on the backend and sync to all browsers. Clearing site storage reloads the shared values. Each browser still acquires and reports its own platform wake lock, and unlock credentials remain in its local profile.

@@ -22,8 +22,9 @@ systemctl --user enable --now service-board.service service-board-browser.servic
 The browser uses `http://localhost:8098/?kiosk=1`, which enables small periodic
 pixel shifts without clipping the interface. Its profile is separate from the
 normal browser. The installed backend listens on IPv4 (`0.0.0.0:8098`) and the
-LAN board is available at `http://10.7.102.91:8098/`. Anonymous LAN clients can only fetch
-the board assets, health probes and status summaries. Logs, diagnostic evidence,
+LAN board is available at `http://10.7.102.91:8098/`. Anonymous LAN clients can fetch
+the board assets, health probes, status summaries and filtered Checks/Probes in the
+diagnostics modal/sidebar. Logs, raw diagnostic evidence,
 measurements, internal links, source details, metrics and runtime operations stay
 local. Known secrets are redacted from status text. Service names, availability,
 mining status, garage relay states and Garmin write age are intentionally visible
@@ -58,6 +59,12 @@ With the environment variable empty or absent, LAN unlocking is disabled.
 Localhost still has full access unless `server.localLock: true` is configured.
 The current HTTP LAN URL sends the code without transport encryption; use HTTPS
 if the network is not trusted.
+
+Theme, compact mode and other saved display preferences are shared by all browsers
+and saved in `~/.config/service-board/display-settings.json`. Changes appear on
+the next normal status poll. Changing these settings requires full access; locked
+clients receive updates automatically. Refresh existing tabs once after the
+upgrade. Browser credentials and fullscreen remain local.
 
 The display service keeps the laptop awake (including lid-switch inhibition),
 turns off ordinary Omarchy idle behavior, retains 20% Intel-panel brightness,
@@ -143,8 +150,12 @@ unit leaves Omarchy's stay-awake preference enabled deliberately.
   `yyyy-mm-dd hh:mm:ss` in each browser's timezone. First observation and
   retained replay never invent a change time. After a disconnect, an altered
   state has an unknown change time until a subsequent live change. Unchanged
-  reconnects preserve the last observed change. Telemetry warns at 10 minutes
-  and fails at 15 minutes. The shared MQTT account reads the controller's exact
+  reconnects preserve the last observed change. The installed monitor uses
+  `warningAfterSeconds: 720` and `criticalAfterSeconds: 1080` (12/18 minutes);
+  reusable module defaults remain 10/15 minutes. An MQTT helper failure reports
+  observer unavailability explicitly. The device at `10.7.102.208`, topic
+  `tasmota_C91575`, reports POWER1 through POWER4: it is the four-output garage
+  controller, not the eight-output Tesla indicator. The shared MQTT account reads the controller's exact
   STATE, LWT and POWER3 topics plus the three Z-Wave battery-monitor topics.
 - Kubernetes workload checks follow owner references so pod replacement does
   not break monitoring. Large resource pages shrink to stay within response

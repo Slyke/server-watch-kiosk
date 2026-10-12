@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test('theme defaults, browser overrides and resetting to the configured default', async ({ page }) => {
   let configuredTheme = 'tron';

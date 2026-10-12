@@ -35,6 +35,10 @@
             "localLock": {
               "type": "boolean",
               "default": false
+            },
+            "preferencesFile": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,

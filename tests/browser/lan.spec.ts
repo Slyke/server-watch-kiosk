@@ -1,23 +1,30 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
+import { lanApi } from './lan-api.js';
 
-test('status-only viewers cannot open diagnostics despite saved browser preferences', async ({ page }) => {
+test('locked viewers can open Checks and Probes in both sidebar and modal', async ({ page, context }) => {
+  await lanApi(context);
   const requests: string[] = []; const errors: string[] = [];
-  page.on('request', request => { if (/diagnostics|\/runtime/.test(request.url())) requests.push(request.url()); });
+  page.on('request', request => { if (/diagnostics\/(logs|description|events)|\/runtime/.test(request.url())) requests.push(request.url()); });
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => localStorage.setItem('service-board.preferences.v1', JSON.stringify({ version: 1, autoDiagnostics: true, manualPaneOpen: true })));
-  await page.route('**/api/v1/status', async route => {
-    const response = await route.fetch(); const snapshot = await response.json();
-    snapshot.ui = { ...snapshot.ui, diagnosticsEnabled: false, optionsEnabled: false, autoDiagnostics: false, allowHotReload: false };
-    await route.fulfill({ response, json: snapshot });
-  });
   await page.goto('/');
   await expect(page.locator('.tile')).toHaveCount(34);
   await expect(page.getByText('Read-only status', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Diagnostics', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Diagnostics', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Options', exact: true })).toHaveCount(0);
-  await page.locator('.tile').first().click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.getByRole('complementary', { name: 'Service diagnostics' })).toHaveCount(0);
+  const sidebar = page.getByRole('complementary', { name: 'Service diagnostics' });
+  await expect(sidebar).toBeVisible();
+  await page.locator('[data-service="nextcloud"]').click();
+  await expect(sidebar.getByRole('tab')).toHaveText(['Checks', 'Probes']);
+  await sidebar.getByRole('tab', { name: 'Probes', exact: true }).click();
+  await expect(sidebar.locator('.log-text')).toContainText('evidence');
+  await page.getByRole('button', { name: 'Close diagnostics', exact: true }).click();
+  await page.locator('[data-service="nextcloud"]').click();
+  const modal = page.getByRole('dialog');
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole('tab')).toHaveText(['Checks', 'Probes']);
+  await modal.getByRole('tab', { name: 'Probes', exact: true }).click();
+  await expect(modal.locator('.log-text')).toContainText('evidence');
   await page.reload();
   await expect(page.locator('.tile')).toHaveCount(34);
   expect(requests).toEqual([]); expect(errors).toEqual([]);

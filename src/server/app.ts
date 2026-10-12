@@ -13,7 +13,9 @@ import { Diagnostics } from './diagnostics.js';
 import { Demo, demoConfig } from '../demo/fixtures.js';
 import { createLogger } from './logging.js';
 import { type Snapshot, iso, ms } from '../shared/contracts.js';
-import { isLocalRequest, statusOnlyPath, statusOnlySnapshot, unlockVerifier } from './access.js';
+import { isLocalRequest, statusOnlyPath, statusOnlySnapshot, statusOnlyDiagnostics, unlockVerifier } from './access.js';
+import { SharedDisplaySettings } from './display-settings.js';
+import { DisplaySettingsSchema } from '../shared/display-settings.js';
 
 export const buildInfo = () => {
   const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -28,6 +30,7 @@ const querySchema = z.object({
 export const createBoard = async ({ config: input, secrets, unlockCode = process.env.SERVICE_BOARD_UNLOCK_CODE ?? '' }: { config: Config; secrets: Secrets; unlockCode?: string }) => {
   const config = input.demo.enabled ? demoConfig({ base: input }) : input;
   const unlock = unlockVerifier(unlockCode);
+  const displaySettings = new SharedDisplaySettings(config.uiDefaults, config.server.preferencesFile);
   const logger = createLogger({ secrets: { ...secrets, values: { ...secrets.values, serviceBoardUnlockCode: unlockCode } } }); const info = buildInfo();
   const kubernetesMetadata = Object.fromEntries(Object.entries(process.env).filter(([k, v]) => k.startsWith('K8S_') && v));
   logger.info('SERVICE_BOOT_DIAGNOSTICS', 'Service Board starting', { ...info, nodeVersion: process.version, mode: config.demo.enabled ? 'demo' : 'live', ...(process.env.LOG_K8S_METADATA_ENABLED === 'true' ? {} : { kubernetes: kubernetesMetadata }) });
@@ -61,7 +64,7 @@ export const createBoard = async ({ config: input, secrets, unlockCode = process
       res.set('cache-control', 'no-store').status(401).json({ error: 'Invalid unlock code' }); return;
     }
     if (res.locals.statusOnly && !statusOnlyPath(req.method, req.path)) {
-      res.status(403).json({ error: 'Access is status-only; diagnostics and controls require a configured unlock code' }); return;
+      res.status(403).json({ error: 'This diagnostic or control requires a configured unlock code' }); return;
     }
     next();
   });
@@ -77,7 +80,7 @@ export const createBoard = async ({ config: input, secrets, unlockCode = process
     demo?.tick();
     const snapshot: Snapshot = { apiVersion: 1, instanceId, revision: ++revision, mode: demo ? 'demo' : 'live', generatedAt: iso(Date.now()), pollMs: ms(config.runtime.pollInterval), staleAfterMs: ms(config.runtime.staleAfter),
       services: health.services(), sources: demo ? [{ id: 'simulated', state: 'healthy', reason: 'Offline fixtures' }] : sources.snapshot(),
-      ui: { ...config.uiDefaults, diagnosticsEnabled: true, allowHotReload: config.plugins.allowHotReload } };
+      ui: { ...config.uiDefaults, diagnosticsEnabled: true, allowHotReload: config.plugins.allowHotReload, sharedPreferences: displaySettings.state } };
     const encoded = JSON.stringify(logger.sanitize(res.locals.statusOnly ? statusOnlySnapshot(snapshot) : snapshot));
     if (Buffer.byteLength(encoded) > 4194304) { res.status(503).json({ error: 'Status snapshot exceeds configured capacity' }); return; }
     res.type('json').send(encoded);
@@ -91,6 +94,11 @@ export const createBoard = async ({ config: input, secrets, unlockCode = process
     const controller = new AbortController(); res.once('close', () => { if (!res.writableEnded) controller.abort(); });
     const q = parsed.data;
     try {
+      if (res.locals.statusOnly) {
+        const view = health.services().find(service => service.id === id);
+        if (!view) { res.status(404).json({ error: 'Unknown service' }); return; }
+        res.json(logger.sanitize(statusOnlyDiagnostics(view, kind, q.discover === 'true'))); return;
+      }
       const result = await diagnostics.get({ request: { id, kind, ...q, previous: q.previous === 'true', discover: q.discover === 'true' }, signal: controller.signal });
       if (!controller.signal.aborted) res.json(result);
     } catch {
@@ -99,6 +107,17 @@ export const createBoard = async ({ config: input, secrets, unlockCode = process
   };
   app.get('/api/v1/services/:id/diagnostics', diagnose);
   app.get('/api/v1/services/:id/diagnostics/:kind', diagnose);
+  app.patch('/api/v1/preferences', (req, res) => {
+    if (!config.uiDefaults.optionsEnabled) { res.sendStatus(404); return; }
+    const origin = req.header('origin');
+    let sameOrigin = !origin;
+    try { if (origin) sameOrigin = new URL(origin).host === req.get('host'); } catch { /* Reject malformed origins. */ }
+    if (!req.is('application/json') || !sameOrigin || req.header('sec-fetch-site') === 'cross-site') { res.sendStatus(403); return; }
+    const parsed = DisplaySettingsSchema.partial().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid display settings' }); return; }
+    try { res.json(displaySettings.patch(parsed.data)); }
+    catch { res.status(503).json({ error: 'Display settings could not be saved' }); }
+  });
   app.get('/api/v1/runtime', (_req, res) => {
     if (!config.uiDefaults.optionsEnabled) { res.sendStatus(404); return; }
     res.json({ watching: Boolean(plugins.watcher), modules: config.plugins.enabled.map(type => ({ type, state: plugins.workers.has(type) ? 'loaded' : (plugins.errors.has(type) ? 'unavailable' : 'idle'), reason: plugins.errors.get(type) })), scenario: demo?.scenario, ...info });

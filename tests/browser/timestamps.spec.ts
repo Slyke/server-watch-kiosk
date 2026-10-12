@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 for (const [timezoneId, expected] of [['America/Vancouver', '2026-10-11 08:00:01'], ['Asia/Tokyo', '2026-10-12 00:00:01']]) {
   test(`change timestamp uses browser timezone ${timezoneId}`, async ({ browser }) => {

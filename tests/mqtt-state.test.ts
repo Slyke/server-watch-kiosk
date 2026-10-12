@@ -6,7 +6,7 @@ import path from 'node:path';
 import { SourceSchema, ConfigSchema, validateConfig } from '../src/server/config.js';
 import { MqttStateHistory } from '../src/server/mqtt-state.js';
 // @ts-ignore Operator-installed ES module.
-import { evaluateGarage } from '../checks/custom.tasmota-state.mjs';
+import garageModule, { evaluateGarage } from '../checks/custom.tasmota-state.mjs';
 
 const source = (stateFile?: string) => {
   const parsed = SourceSchema.parse({ type: 'mqtt', url: 'mqtt://localhost', topics: ['tele', 'power', 'lwt'], stateFile,
@@ -63,4 +63,14 @@ test('tracked MQTT state cannot name a topic outside the source allowlist', () =
   if (config.sources.broker?.type !== 'mqtt') throw new Error('Invalid fixture');
   config.sources.broker.topics = ['tele'];
   assert.throws(() => validateConfig({ config, secrets: { schemaVersion: 1, values: {} } }), /Tracked topics/);
+});
+
+test('garage supports extra telemetry grace and reports MQTT helper failures clearly', async () => {
+  const args = { lwt: { payload: 'Online' }, message: { receiptAt: 100000, retained: false }, relay: { value: 'OFF', lastChangedAt: null }, warningAfterSeconds: 720, criticalAfterSeconds: 1080 };
+  assert.equal(evaluateGarage({ ...args, now: 100000 + 660000 }).state, 'healthy');
+  assert.equal(evaluateGarage({ ...args, now: 100000 + 720000 }).state, 'warning');
+  assert.equal(evaluateGarage({ ...args, now: 100000 + 1080000 }).state, 'critical');
+  assert.equal(evaluateGarage({ ...args, now: 100001, criticalAfterSeconds: 60 }).state, 'unknown');
+  const result = await garageModule.check({ config: { source: 'garage', lwtTopic: 'lwt' }, context: { mqtt: { latest: async () => { throw new Error('Observer disconnected'); } } } });
+  assert.equal(result.state, 'unknown'); assert.match(result.reason, /observer reconnect/);
 });

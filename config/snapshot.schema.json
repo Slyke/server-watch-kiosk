@@ -479,6 +479,83 @@
                 },
                 "maxItems": 1000
               }
+            },
+            "sharedPreferences": {
+              "type": "object",
+              "properties": {
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "themeOverride": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/definitions/snapshot/properties/ui/properties/theme"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dense": {
+                      "type": "boolean"
+                    },
+                    "keepAwake": {
+                      "type": "boolean"
+                    },
+                    "sortMode": {
+                      "type": "string",
+                      "enum": [
+                        "severity",
+                        "name",
+                        "custom"
+                      ]
+                    },
+                    "autoDiagnostics": {
+                      "type": "boolean"
+                    },
+                    "splitRatio": {
+                      "type": "number",
+                      "minimum": 0.2,
+                      "maximum": 0.8
+                    },
+                    "customOrders": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+                        },
+                        "maxItems": 1000
+                      }
+                    },
+                    "customOrder": {
+                      "type": "string",
+                      "maxLength": 64
+                    }
+                  },
+                  "required": [
+                    "themeOverride",
+                    "dense",
+                    "keepAwake",
+                    "sortMode",
+                    "autoDiagnostics",
+                    "splitRatio",
+                    "customOrders",
+                    "customOrder"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "revision",
+                "value"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

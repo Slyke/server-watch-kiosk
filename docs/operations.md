@@ -8,10 +8,15 @@ address and Host header) receives the full API by default. Set
 `server.localLock: true` to apply the same code requirement locally; it defaults
 to `false`. Requests with the correct configured code receive the full API below.
 Anonymous locked clients can use GET
-or HEAD for the UI assets, `/api/v1/status`, `/api/v1/access`, `/livez` and `/readyz`; other paths and
+or HEAD for the UI assets, `/api/v1/status`, `/api/v1/access`, `/livez`, `/readyz`, and the
+diagnostic index, Checks and Probes routes; other paths and
 methods return 403. Forwarded headers do not grant local privileges. Remote
 status omits raw evidence, measurements, internal links and source details, and
-disables diagnostics and controls in the UI. Service names and health/device
+disables settings and runtime controls in the UI. Checks and Probes remain available
+in the modal and sidebar. Public probes show outcomes, timestamps, numeric HTTP
+status codes and durations; arbitrary evidence labels/messages and measurements
+are excluded. Public discovery never fetches logs, enumerates pods, invokes plugin
+diagnostics or reads full-access diagnostic cache entries. Service names and health/device
 summaries remain visible. Configured secrets are redacted from all status text.
 The legacy `server.remoteAccess` field accepts only `status-only`; `full` is
 rejected at startup. Reverse proxies and container port publishing usually
@@ -23,7 +28,7 @@ storage for this exact origin (scheme, hostname and port). The browser sends it
 as `Authorization: Bearer …` on same-origin API requests only. A saved value
 alone cannot bypass server checks. Invalid codes return 401; the UI discards a
 stale saved code and falls back to the public status view. **Lock UI** removes
-the saved code and closes diagnostics, including in other tabs of that origin.
+the saved code and clears privileged diagnostic content, including in other tabs of that origin.
 Existing configured runtime/module restrictions still apply to an unlocked UI.
 
 You can also set the key directly in the browser console on the board's origin:
@@ -51,9 +56,10 @@ untrusted network; the current Omarchy HTTP LAN URL does not encrypt it in trans
 | --- | --- |
 | GET /api/v1/status | Version 1 snapshot, instance/revision, generation time, poll interval, sources and bounded service/check state |
 | GET /api/v1/access | Whether this request has full access, used a valid code, and whether code unlocking is configured; never returns the code |
-| GET /api/v1/services/:id/diagnostics | Applicable kinds and scoped pod/container choices |
-| GET /api/v1/services/:id/diagnostics?discover=true | Bounded relevant-log discovery and preferred fallback |
-| GET /api/v1/services/:id/diagnostics/:kind | checks/logs/description/events/probes |
+| GET /api/v1/services/:id/diagnostics | Locked: Checks/Probes only, no pod inventory; unlocked: applicable kinds and scoped choices |
+| GET /api/v1/services/:id/diagnostics?discover=true | Locked: selects Checks without private discovery; unlocked: bounded relevant-log discovery |
+| GET /api/v1/services/:id/diagnostics/:kind | Locked: filtered checks/probes; logs/description/events and full evidence require unlocking |
+| PATCH /api/v1/preferences | Validated partial display-settings update; full access and same-origin JSON required |
 | GET /api/v1/runtime | Enabled UI/runtime controls and module load status |
 | POST /api/v1/runtime | refresh, reloadModules, watchModules, or demo scenario; JSON and same-origin checks |
 | GET /livez | Dependency-free listener/process liveness and build/correlation metadata |
@@ -61,6 +67,22 @@ untrusted network; the current Omarchy HTTP LAN URL does not encrypt it in trans
 | GET /metrics | Bounded configured labels; synthetic demo service-health series omitted |
 
 Status contains no raw config, source credentials, query text or log bodies. Correlation IDs appear in x-correlation-id and application error/probe bodies. Browser snapshots discard lower revisions from the same runtime instance. Server restarts reset in-memory history and confirmation windows.
+
+Saved display preferences are shared across browsers: theme, compact cells, keep-awake,
+sort order, named layouts, split ratio and automatic diagnostics. Status snapshots
+include their revision and values; clients apply changes on the next normal poll
+(typically five seconds), including locked LAN clients. Only full-access clients
+can edit them. Updates patch changed fields so one browser's theme change does not
+overwrite another browser's layout change. Fullscreen, the current diagnostic
+selection, paused browser polling and unlock credentials remain local interactions.
+
+Display settings are atomically saved with mode 0600 to `display-settings.json`
+beside the config file. Override with `server.preferencesFile` or
+`DISPLAY_SETTINGS_FILE`; relative paths resolve beside the config. The directory
+must be writable. Invalid saved settings fail startup rather than silently resetting.
+Compose mounts a persistent `board-state` volume at `/var/lib/service-board` for this
+file while keeping the rest of the container filesystem read-only. Old browser-local
+display preferences are superseded by shared values after refreshing the page.
 
 Diagnostics parameters: pod is an opaque source:UID resolved within current service inventory; container must belong to that pod. previous=true selects previous logs. lines defaults to 200, maximum 2000; sinceSeconds defaults to 900, maximum 86400. No request accepts URLs, SQL, namespaces, source IDs, arbitrary file paths or Kubernetes selectors.
 

@@ -31,7 +31,7 @@ const wireFetch = (url: string, init: { method?: string; headers?: Record<string
   });
   request.on('error', reject); request.end(init.body);
 });
-test('LAN status access excludes evidence, credentials and all diagnostic/runtime routes', async () => {
+test('LAN status access excludes raw evidence, credentials and private diagnostic/runtime routes', async () => {
   const board = await createBoard({ config: ConfigSchema.parse({ schemaVersion: 1, demo: { enabled: false }, checks: { check: { type: 'tcp', params: { host: '127.0.0.1', port: 1 } } }, services: [{ id: 'service', name: 'Service', checks: [{ id: 'check' }], links: [{ label: 'Internal', url: 'http://private.example/' }] }] }), secrets: secret });
   board.scheduler.close();
   board.health.record({ id: 'check', result: { state: 'healthy', reason: 'Ready ' + secret.values.auth, evidence: [{ kind: 'custom', label: 'private', message: 'private-evidence' }], measurements: { private: 'private-measurement' } } });
@@ -41,12 +41,18 @@ test('LAN status access excludes evidence, credentials and all diagnostic/runtim
     const remote = await wireFetch(url + '/api/v1/status', { headers });
     assert.equal(remote.status, 200);
     const data = await remote.json(); const encoded = JSON.stringify(data);
-    assert.equal(data.ui.diagnosticsEnabled, false); assert.equal(data.ui.optionsEnabled, false);
+    assert.equal(data.ui.diagnosticsEnabled, true); assert.equal(data.ui.optionsEnabled, false);
     assert.equal(data.ui.autoDiagnostics, false); assert.deepEqual(data.sources, []);
     for (const hidden of ['private-evidence', 'private-measurement', 'private.example', secret.values.auth]) assert.ok(!encoded.includes(hidden));
     assert.equal(data.services[0].checks[0].reason, 'Ready [REDACTED]');
-    for (const route of ['/api/v1/runtime', '/api/v1/services/service/diagnostics', '/api/v1/services/service/diagnostics/logs', '/api/v1/services/service/diagnostics/description', '/metrics', '/config.json5', '/secrets.json5', '/API/v1/runtime']) {
+    for (const route of ['/api/v1/runtime', '/api/v1/services/service/diagnostics/logs', '/api/v1/services/service/diagnostics/description', '/metrics', '/config.json5', '/secrets.json5', '/API/v1/runtime']) {
       assert.equal((await wireFetch(url + route, { headers })).status, 403, route);
+    }
+    for (const kind of ['checks', 'probes']) {
+      const response = await wireFetch(url + '/api/v1/services/service/diagnostics/' + kind, { headers });
+      assert.equal(response.status, 200); const section = await response.json();
+      for (const hidden of ['private-evidence', 'private-measurement', 'private.example', secret.values.auth]) assert.ok(!JSON.stringify(section).includes(hidden));
+      assert.match(section.text, /Ready \[REDACTED\]/);
     }
     assert.equal((await wireFetch(url + '/api/v1/runtime', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: '{"action":"refresh"}' })).status, 403);
     assert.equal((await wireFetch(url + '/api/v1/status', { method: 'POST', headers })).status, 403);

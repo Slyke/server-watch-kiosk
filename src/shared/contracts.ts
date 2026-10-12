@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { DisplaySettingsState } from './display-settings.js';
 
 export const themes = ['reference', 'dark', 'light', 'contrast', 'tron'] as const;
 export const ThemeSchema = z.enum(themes);
@@ -65,5 +66,5 @@ export type Snapshot = {
   apiVersion: 1; instanceId: string; revision: number; mode: 'demo' | 'live'; generatedAt: string;
   pollMs: number; staleAfterMs: number; services: ServiceView[];
   sources: { id: string; state: State; reason: string }[];
-  ui: { theme: string; optionsEnabled: boolean; diagnosticsEnabled?: boolean; allowHotReload: boolean; autoDiagnostics: boolean; sortMode: string; splitRatio: number; customOrders: Record<string, string[]> };
+  ui: { theme: string; optionsEnabled: boolean; diagnosticsEnabled?: boolean; allowHotReload: boolean; autoDiagnostics: boolean; sortMode: string; splitRatio: number; customOrders: Record<string, string[]>; sharedPreferences?: DisplaySettingsState };
 };
