@@ -8,7 +8,7 @@ address and Host header) receives the full API by default. Set
 `server.localLock: true` to apply the same code requirement locally; it defaults
 to `false`. Requests with the correct configured code receive the full API below.
 Anonymous locked clients can use GET
-or HEAD for the UI assets, `/api/v1/status`, `/api/v1/access`, `/livez`, `/readyz`, and the
+or HEAD for the UI assets, `/api/v1/status`, `/api/v1/status/locked`, `/api/v1/access`, `/livez`, `/readyz`, and the
 diagnostic index, Checks and Probes routes; other paths and
 methods return 403. Forwarded headers do not grant local privileges. Remote
 status omits raw evidence, measurements, internal links and source details, and
@@ -55,6 +55,7 @@ untrusted network; the current Omarchy HTTP LAN URL does not encrypt it in trans
 | Route | Behavior |
 | --- | --- |
 | GET /api/v1/status | Version 1 snapshot, instance/revision, generation time, poll interval, sources and bounded service/check state |
+| GET /api/v1/status/locked | Always-filtered locked-screen JSON, including safe Checks/Probes sections keyed by service ID in `diagnostics`; identical filtering even for localhost and unlocked callers |
 | GET /api/v1/access | Whether this request has full access, used a valid code, and whether code unlocking is configured; never returns the code |
 | GET /api/v1/services/:id/diagnostics | Locked: Checks/Probes only, no pod inventory; unlocked: applicable kinds and scoped choices |
 | GET /api/v1/services/:id/diagnostics?discover=true | Locked: selects Checks without private discovery; unlocked: bounded relevant-log discovery |
@@ -67,6 +68,44 @@ untrusted network; the current Omarchy HTTP LAN URL does not encrypt it in trans
 | GET /metrics | Bounded configured labels; synthetic demo service-health series omitted |
 
 Status contains no raw config, source credentials, query text or log bodies. Correlation IDs appear in x-correlation-id and application error/probe bodies. Browser snapshots discard lower revisions from the same runtime instance. Server restarts reset in-memory history and confirmation windows.
+
+For a read-only integration, fetch `http://BOARD:8098/api/v1/status/locked` without
+credentials. It includes every card and component state/reason, dependencies,
+freshness and confirmation windows, observation/change timestamps, presentations,
+and shared display preferences. `diagnostics[serviceId].checks` and `.probes` use
+the same bounded, sanitized sections as the locked browser. Times are RFC 3339 UTC;
+clients can format them in their browser timezone. This is a current server snapshot,
+not the browser's transient connection state, selected modal or fullscreen status.
+Responses are uncached and retain the status endpoint's 4 MiB size limit.
+
+The `tls` adapter combines TCP connectivity and TLS certificate verification in
+one component. Configure one check per domain and reference them from a single
+Managed domains card. It sends no ping, HTTP request or credentials. Both TCP and
+a trusted chain, matching hostname and current validity dates must pass. It warns
+within `warningBefore` (default `14d`) of leaf expiry; expired, untrusted,
+not-yet-valid or mismatched certificates and connection failures are critical.
+The hostname is sent as SNI. Optional `servername` overrides the TLS identity when
+connecting to an IP; optional `caFile` supplies a private CA bundle (absolute path).
+There is no configuration option to bypass validation. The diagnostic handshake
+retains an invalid certificate's dates, then closes without sending application data;
+Node's authorization result and hostname check still gate success
+([Node TLS API](https://nodejs.org/download/release/v24.20.0/docs/api/tls.html)).
+
+```json5
+checks: {
+  'cert-example': { type: 'tls', label: 'example.com', interval: '5m', timeout: '8s',
+    staleAfter: '15m', failureAfter: '0s', recoveryAfter: '0s',
+    params: { host: 'example.com', port: 443, warningBefore: '14d' } },
+},
+services: [{ id: 'managed-domains', name: 'Managed domains', group: 'Network',
+  checks: [{ id: 'cert-example' }] }],
+```
+
+Infrastructure devices can each use their own service card with a `network.node`
+check (`host`, `samples: 2`, optional `apiPort`). This uses one-second ping timeouts
+and retries a failed/degraded ping after five seconds; allow a `20s` check timeout.
+Without `apiPort` the component tests ICMP reachability only. With it, both ping
+and the TCP port must pass for a healthy square.
 
 Saved display preferences are shared across browsers: theme, compact cells, keep-awake,
 sort order, named layouts, split ratio and automatic diagnostics. Status snapshots

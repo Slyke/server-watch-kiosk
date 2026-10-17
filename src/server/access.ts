@@ -22,7 +22,7 @@ export const isLocalRequest = (req: Pick<Request, 'socket' | 'headers'>): boolea
 };
 
 export const statusOnlyPath = (method: string, path: string): boolean => ['GET', 'HEAD'].includes(method)
-  && (['/', '/index.html', '/favicon.svg', '/api/v1/status', '/api/v1/access', '/livez', '/readyz'].includes(path)
+  && (['/', '/index.html', '/favicon.svg', '/api/v1/status', '/api/v1/status/locked', '/api/v1/access', '/livez', '/readyz'].includes(path)
     || /^\/api\/v1\/services\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}\/diagnostics(?:\/(?:checks|probes))?$/.test(path)
     || /^\/assets\/[a-zA-Z0-9_.-]+\.(js|css|svg|png|woff2?)$/.test(path));
 
@@ -36,6 +36,13 @@ export const statusOnlySnapshot = (snapshot: Snapshot): Snapshot => ({
   services: snapshot.services.map(statusOnlyService),
   sources: [],
   ui: { ...snapshot.ui, optionsEnabled: false, diagnosticsEnabled: true, autoDiagnostics: false, allowHotReload: false },
+});
+
+export const lockedScreenSnapshot = (snapshot: Snapshot) => ({
+  ...statusOnlySnapshot(snapshot),
+  diagnostics: Object.fromEntries(snapshot.services.map(service => [service.id, {
+    checks: statusOnlyDiagnostics(service, 'checks'), probes: statusOnlyDiagnostics(service, 'probes'),
+  }])),
 });
 
 // Build public diagnostics directly from observations. Never run discovery, fetch logs,

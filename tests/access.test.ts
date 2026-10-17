@@ -89,6 +89,30 @@ test('unlock configuration rejects values that cannot be safely transported as a
   assert.equal(unlockVerifier(code).accepts('Bearer ' + code + '-extra'), false);
 });
 
+test('locked snapshot export stays public for LAN, localhost and unlocked callers and includes safe diagnostics', async () => {
+  const f = await fixture(code);
+  let privateCalls = 0;
+  f.board.diagnostics.get = async () => { privateCalls++; throw new Error('Private diagnostic fetch'); };
+  try {
+    for (const headers of [{ host: 'board.lan' }, { host: 'localhost' }, { host: 'board.lan', authorization: 'Bearer ' + code }]) {
+      const response = await request(f.url, '/api/v1/status/locked', headers);
+      assert.equal(response.status, 200); assert.equal(response.headers['cache-control'], 'no-store');
+      const snapshot = JSON.parse(response.text);
+      assert.deepEqual(snapshot.sources, []); assert.deepEqual(snapshot.services[0].links, []);
+      assert.equal(snapshot.ui.optionsEnabled, false); assert.equal(snapshot.ui.allowHotReload, false);
+      assert.equal(snapshot.ui.diagnosticsEnabled, true); assert.ok(snapshot.ui.sharedPreferences);
+      assert.equal(snapshot.services[0].checks[0].reason, 'Ready');
+      assert.ok(snapshot.services[0].checks[0].completedAt); assert.equal(typeof snapshot.services[0].remainingMs, 'number');
+      assert.deepEqual(Object.keys(snapshot.diagnostics.service), ['checks', 'probes']);
+      assert.match(snapshot.diagnostics.service.probes.text, /"statusCode": 200/);
+      assert.match(snapshot.diagnostics.service.probes.text, /"durationMs": 125/);
+      for (const value of [code, 'private-probe-label', 'private-measurement', 'Evidence']) assert.ok(!response.text.includes(value), value);
+    }
+    assert.equal((await request(f.url, '/api/v1/status/locked', { 'content-type': 'application/json' }, '{}')).status, 403);
+    assert.equal(privateCalls, 0);
+  } finally { await f.close(); }
+});
+
 test('local locking is opt-in and LAN locking cannot be disabled', async () => {
   assert.equal(ConfigSchema.parse({ schemaVersion: 1 }).server.localLock, false);
   assert.equal(ConfigSchema.safeParse({ schemaVersion: 1, server: { remoteAccess: 'full' } }).success, false);

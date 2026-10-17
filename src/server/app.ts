@@ -13,7 +13,7 @@ import { Diagnostics } from './diagnostics.js';
 import { Demo, demoConfig } from '../demo/fixtures.js';
 import { createLogger } from './logging.js';
 import { type Snapshot, iso, ms } from '../shared/contracts.js';
-import { isLocalRequest, statusOnlyPath, statusOnlySnapshot, statusOnlyDiagnostics, unlockVerifier } from './access.js';
+import { isLocalRequest, statusOnlyPath, statusOnlySnapshot, statusOnlyDiagnostics, lockedScreenSnapshot, unlockVerifier } from './access.js';
 import { SharedDisplaySettings } from './display-settings.js';
 import { DisplaySettingsSchema } from '../shared/display-settings.js';
 
@@ -75,13 +75,13 @@ export const createBoard = async ({ config: input, secrets, unlockCode = process
   app.get('/api/v1/access', (_req, res) => {
     res.json({ fullAccess: !res.locals.statusOnly, unlockedWithCode: res.locals.unlockedWithCode, unlockAvailable: res.locals.unlockAvailable });
   });
-  app.get('/api/v1/status', (_req, res) => {
+  app.get(['/api/v1/status', '/api/v1/status/locked'], (req, res) => {
     if (demo?.scenario === 'api-disconnect') { res.status(503).json({ error: 'Simulated API disconnect', correlation_id: res.locals.correlationId }); return; }
     demo?.tick();
     const snapshot: Snapshot = { apiVersion: 1, instanceId, revision: ++revision, mode: demo ? 'demo' : 'live', generatedAt: iso(Date.now()), pollMs: ms(config.runtime.pollInterval), staleAfterMs: ms(config.runtime.staleAfter),
       services: health.services(), sources: demo ? [{ id: 'simulated', state: 'healthy', reason: 'Offline fixtures' }] : sources.snapshot(),
       ui: { ...config.uiDefaults, diagnosticsEnabled: true, allowHotReload: config.plugins.allowHotReload, sharedPreferences: displaySettings.state } };
-    const encoded = JSON.stringify(logger.sanitize(res.locals.statusOnly ? statusOnlySnapshot(snapshot) : snapshot));
+    const encoded = JSON.stringify(logger.sanitize(req.path === '/api/v1/status/locked' ? lockedScreenSnapshot(snapshot) : (res.locals.statusOnly ? statusOnlySnapshot(snapshot) : snapshot)));
     if (Buffer.byteLength(encoded) > 4194304) { res.status(503).json({ error: 'Status snapshot exceeds configured capacity' }); return; }
     res.type('json').send(encoded);
   });

@@ -38,6 +38,7 @@
                   "graphql",
                   "ping",
                   "tcp",
+                  "tls",
                   "dns",
                   "mqtt",
                   "prometheus",

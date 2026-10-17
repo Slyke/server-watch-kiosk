@@ -22,7 +22,7 @@ systemctl --user enable --now service-board.service service-board-browser.servic
 The browser uses `http://localhost:8098/?kiosk=1`, which enables small periodic
 pixel shifts without clipping the interface. Its profile is separate from the
 normal browser. The installed backend listens on IPv4 (`0.0.0.0:8098`) and the
-LAN board is available at `http://10.7.102.91:8098/`. Anonymous LAN clients can fetch
+LAN board is available at `http://10.7.1.91:8098/`. Anonymous LAN clients can fetch
 the board assets, health probes, status summaries and filtered Checks/Probes in the
 diagnostics modal/sidebar. Logs, raw diagnostic evidence,
 measurements, internal links, source details, metrics and runtime operations stay
@@ -34,8 +34,25 @@ Omarchy's UFW firewall needs a rule for the local network. Run as the laptop's
 administrator (the installer's SSH account has no passwordless sudo):
 
 ```sh
-sudo ufw allow from 10.7.0.0/16 to 10.7.102.91 port 8098 proto tcp comment 'Service Board LAN'
+sudo ufw allow from 10.7.0.0/16 to 10.7.1.91 port 8098 proto tcp comment 'Service Board LAN'
 ```
+
+The laptop's OPNsense DHCP reservation is `10.7.1.91` for Wi-Fi MAC
+`68:ec:c5:3c:4d:df` (`omarchy-lt`), replacing `10.7.102.91`. Keep NetworkManager
+on DHCP. When migrating, add the firewall rule above before renewing the `Phox`
+connection with `sudo nmcli connection up uuid 5411a682-df08-4b79-9273-94cbbdd629dc`.
+Existing tabs at the old IP must open the new URL; the local kiosk uses localhost.
+Unlock codes are saved per origin, so LAN browsers need the existing code again
+at the new address. The locked JSON export is
+`http://10.7.1.91:8098/api/v1/status/locked`.
+
+The installed Network group includes separate core-router (`10.7.1.1`),
+under-stairs AP (`10.7.1.2`), upstairs AP (`10.7.1.3`), and modem (`192.168.1.1`)
+cards. The router and APs require ping and TCP 443; the modem uses ping. Each ping
+has a one-second timeout and a second attempt after five seconds on loss/latency.
+The Managed domains card has one TLS component per domain, initially `phoxis.xyz`:
+TCP 443 plus chain/hostname/date validation, no ping, checked every five minutes,
+with an expiry warning starting fourteen days before expiry.
 
 Full diagnostics require the configured unlock code, or a loopback socket with
 a localhost/loopback Host header while `server.localLock` is `false` (the default).

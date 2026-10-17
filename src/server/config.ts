@@ -48,6 +48,7 @@ export const builtinSchemas: Record<string, z.ZodTypeAny> = {
   http: z.object({ ...requestParams, method: z.enum(['GET', 'HEAD']).default('GET') }).strict(),
   graphql: z.object({ ...requestParams, query: z.string().min(1).max(16000), variables: z.record(z.unknown()).default({}), allowPartialData: z.boolean().default(false) }).strict(),
   tcp: z.object({ host, port: z.number().int().min(1).max(65535) }).strict(),
+  tls: z.object({ host, port: z.number().int().min(1).max(65535).default(443), servername: host.optional(), caFile: z.string().min(1).optional(), warningBefore: duration.refine(v => ms(v) > 0 && Number.isFinite(ms(v)), 'Expiry warning must be positive and finite').default('14d') }).strict(),
   dns: z.object({ host, resolver: z.string().optional(), recordType: z.enum(['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'NS']).default('A'), expected: z.array(z.string()).optional() }).strict(),
   ping: z.object({ host, samples: z.number().int().min(1).max(5).default(3), warningLatency: duration.default('250ms'), criticalLoss: z.number().min(0).max(100).default(100) }).strict(),
   'network.node': z.object({ host, apiPort: z.number().int().min(1).max(65535).optional(), samples: z.number().int().min(1).max(5).default(2), warningLatency: duration.default('250ms'), criticalLoss: z.number().min(0).max(100).default(100) }).strict(),

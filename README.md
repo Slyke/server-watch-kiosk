@@ -63,7 +63,7 @@ Diagnostics open automatically for fresh confirmed failures. Manual tile/tab/pod
 
 ## Checks and integrations
 
-Built-ins cover reusable protocols: HTTP/GraphQL assertions, TCP, DNS, bounded ICMP, MQTT subscriptions, Prometheus scalar/vector queries, parameterized read-only Postgres, and Kubernetes workloads/pods/jobs. Complex integration logic belongs in [custom modules](./docs/modules.md). Garmin has an example module instead of application-specific backend/UI code.
+Built-ins cover reusable protocols: HTTP/GraphQL assertions, TCP, TLS certificate validity/expiry, DNS, bounded ICMP, MQTT subscriptions, Prometheus scalar/vector queries, parameterized read-only Postgres, and Kubernetes workloads/pods/jobs. Complex integration logic belongs in [custom modules](./docs/modules.md). Garmin has an example module instead of application-specific backend/UI code. The [operations guide](./docs/operations.md) documents managed-domain checks and the always-filtered `/api/v1/status/locked` JSON export.
 
 Checks support `interval`, `timeout`, `staleAfter`, `failureAfter` and `recoveryAfter` overrides with explicit units. First trustworthy success can pass immediately. First failure becomes degraded; a later consecutive observation at/after the confirmation window promotes it. Recovery also requires evidence across its window. Old sample timestamps cannot advance a transition. Stale or untrusted evidence is unknown.
 

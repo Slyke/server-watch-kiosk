@@ -18,7 +18,7 @@ export const iso = (time: number) => new Date(time).toISOString();
 export const severity: Record<State, number> = { critical: 0, unknown: 1, warning: 2, healthy: 3, paused: 4 };
 const shortText = z.string().max(1024);
 export const EvidenceSchema = z.object({
-  kind: z.enum(['http', 'graphql', 'ping', 'tcp', 'dns', 'mqtt', 'prometheus', 'postgres', 'kubernetes', 'custom']),
+  kind: z.enum(['http', 'graphql', 'ping', 'tcp', 'tls', 'dns', 'mqtt', 'prometheus', 'postgres', 'kubernetes', 'custom']),
   label: z.string().max(128), message: shortText.optional(),
   statusCode: z.number().int().min(100).max(599).optional(), durationMs: z.number().finite().nonnegative().optional(),
 }).strict();
