@@ -46,9 +46,10 @@ Unlock codes are saved per origin, so LAN browsers need the existing code again
 at the new address. The locked JSON export is
 `http://10.7.1.91:8098/api/v1/status/locked`.
 
-The installed Network group includes separate core-router (`10.7.1.1`),
-under-stairs AP (`10.7.1.2`), upstairs AP (`10.7.1.3`), and modem (`192.168.1.254`)
-cards. The router and APs require ping and TCP 443; the modem uses ping. Each ping
+The Network stack card reuses the original OPNsense service ID (`router`) and has
+four required component squares: core router (`10.7.1.1`), under-stairs AP
+(`10.7.1.2`), upstairs AP (`10.7.1.3`), and modem (`192.168.1.254`).
+The router and APs require ping and TCP 443; the modem uses ping. Each ping
 has a one-second timeout and a second attempt after five seconds on loss/latency.
 The Managed domains card has one TLS component per domain, initially `phoxis.xyz`:
 TCP 443 plus chain/hostname/date validation, no ping, checked every five minutes,
