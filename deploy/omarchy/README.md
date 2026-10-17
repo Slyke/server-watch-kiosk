@@ -47,7 +47,7 @@ at the new address. The locked JSON export is
 `http://10.7.1.91:8098/api/v1/status/locked`.
 
 The installed Network group includes separate core-router (`10.7.1.1`),
-under-stairs AP (`10.7.1.2`), upstairs AP (`10.7.1.3`), and modem (`192.168.1.1`)
+under-stairs AP (`10.7.1.2`), upstairs AP (`10.7.1.3`), and modem (`192.168.1.254`)
 cards. The router and APs require ping and TCP 443; the modem uses ping. Each ping
 has a one-second timeout and a second attempt after five seconds on loss/latency.
 The Managed domains card has one TLS component per domain, initially `phoxis.xyz`:
