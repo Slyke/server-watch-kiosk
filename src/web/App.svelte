@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import Diagnostics from './Diagnostics.svelte';
+  import ComponentIndicators from './ComponentIndicators.svelte';
   import { type ServiceView, type Snapshot, type Theme, states, themes } from '../shared/contracts.js';
   import { automaticPane, currentServices, sortedServices, moveService, type Pane } from './state.js';
   import { preferences, savePreferences, type Preferences } from './preferences.js';
@@ -312,7 +313,7 @@
             </div>
             <span class="tile-group">{service.group}</span>
             <div class="tile-body">
-              <p>{service.presentation?.text ?? service.reason}</p>
+              {#if service.presentation?.text || service.state !== 'healthy'}<p>{service.presentation?.text ?? service.reason}</p>{/if}
               {#if service.presentation?.timestamp}
                 <p class="change-time">{service.presentation.timestamp.label}: {#if service.presentation.timestamp.at}<time datetime={service.presentation.timestamp.at}>{localTimestamp(service.presentation.timestamp.at)}</time>{:else}not observed yet{/if}</p>
               {/if}
@@ -320,10 +321,7 @@
             <div class="tile-footer">
               <span>{t['board-' + service.state as keyof typeof t]}</span>
               {#if service.checks.length}
-                <span class="component-statuses" role="img" aria-label={service.checks.map(check => check.label + ': ' + t['board-' + check.state as keyof typeof t]).join('; ')}>
-                  {#each service.checks.slice(0, 8) as check}<span class="component-status" data-state={check.state} title={check.label + ': ' + t['board-' + check.state as keyof typeof t]} aria-hidden="true">{icons[check.state]}</span>{/each}
-                  {#if service.checks.length > 8}<span class="component-overflow" title={service.checks.slice(8).map(check => check.label + ': ' + t['board-' + check.state as keyof typeof t]).join('; ')} aria-hidden="true">+{service.checks.length - 8}</span>{/if}
-                </span>
+                <ComponentIndicators checks={service.checks} {icons} labels={t} />
               {/if}
             </div>
           </button>
